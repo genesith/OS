@@ -31,7 +31,7 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 static void put_waitlist(struct thread * t, int64_t wakeup);
-static void check_wakelist();
+static void check_waitlist();
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -102,7 +102,6 @@ timer_sleep (int64_t ticks)
 	intr_disable();
   	put_waitlist(t, start+ticks);
   	thread_block();
-
   }
   
 
@@ -185,7 +184,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  check_wakelist(); // Which one should be executed first????
+  check_waitlist(); // Which one should be executed first????
   thread_tick ();
 }
 
@@ -267,7 +266,7 @@ static void put_waitlist(struct thread * t, int64_t wakeup){
 	return;
 }
 
-static void check_wakelist(){
+static void check_waitlist(){
 	struct list_elem * temp;
 	for (temp = list_begin(&wait_list); temp != list_end(&wait_list); temp = list_next (temp)){
 		struct thread *t = list_entry(temp, struct thread, wait_elem);
