@@ -54,14 +54,6 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
-struct next_highest_prio
-  {
-    int priority;
-    struct thread * prio_thread;
-  };
-
-
-static struct next_highest_prio * max;
 bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
@@ -103,8 +95,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  max = malloc(sizeof(struct next_highest_prio));
-  memset(&max, 0, sizeof(struct next_highest_prio));
+//  memset(&max, 0, sizeof(max));
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -246,26 +237,36 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
+  int cnt = 0;
   enum intr_level old_level;
-  int a;
-  int b;
+  struct list_elem * temp;
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  
-  a = t->priority;
-  b = max -> priority;
-  if (a >=b)
-  //if (t->priority >= max->priority)
-    {
-     printf("%d\n", a);
-     max->prio_thread = t;
-     printf("%d\n", b);
-     max->priority = t->priority;
-    }
+  if (list_empty(&ready_list)){
+  	list_push_back(&ready_list, &t->elem);
+	cnt = 1;
+  }
 
-  list_push_back (&ready_list, &t->elem);
+  else{
+    for (temp = list_begin(&ready_list); temp != list_end(&ready_list); temp = list_next(temp)){
+  	  struct thread * target = list_entry(temp, struct thread, elem);
+//	  printf("target : %d, input : %d", target->priority, t->priority);
+	  if ((t-> priority) >= (target->priority)){
+//	    printf("target : %d, input : %d", target->priority, t->priority);
+		list_insert(&target->elem, &t->elem);
+		cnt = 1;
+	    break;
+	  }
+  	}
+  }
+
+  if (cnt == 0){
+  	list_push_back(&ready_list, &t->elem);
+  }
+
+//  list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -516,11 +517,11 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return max->prio_thread;
+    return list_entry(list_pop_front(&ready_list), struct thread, elem);
    // return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
-/* Completes a thread switch by activating the new thread's page
+/* Completes a thread/ switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
    At this function's invocation, we just switched from thread
