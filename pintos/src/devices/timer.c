@@ -18,10 +18,6 @@
 #endif
 
 /* Number of timer ticks since OS booted. */
-struct wait_thread{
-	struct thread * sleeping_thread;
-	int64_t wakeup_time;
-};
 
 static int64_t ticks;
 
@@ -265,22 +261,19 @@ real_time_delay (int64_t num, int32_t denom)
 }
 
 static void put_waitlist(struct thread * t, int64_t wakeup){
-	struct wait_thread * temp = malloc(sizeof(struct wait_thread));
-	temp->sleeping_thread = t;
-	temp->wakeup_time = wakeup;
-	list_push_back(&wait_list, temp);
+	//struct wait_thread * temp = malloc(sizeof(struct wait_thread));
+	t->wakeup_time = wakeup;
+	list_push_back(&wait_list, &t->wait_elem);
 	return;
 }
 
 static void check_wakelist(){
-	int cnt = 0;
-	struct wait_thread * temp;
-	temp = list_begin (&wait_list);
-	for (temp; cnt < list_size(&wait_list); temp = list_next (temp)){
-		if(temp -> wakeup_time == ticks){
-			thread_unblock(temp->sleeping_thread);
-			list_remove(temp);
-			cnt++;
+	struct list_elem * temp;
+	for (temp = list_begin(&wait_list); temp != list_end(&wait_list); temp = list_next (temp)){
+		struct thread *t = list_entry(temp, struct thread, wait_elem);
+		if(t -> wakeup_time == ticks){
+			thread_unblock(t);
+			list_remove(&t->wait_elem);
 		}
 	}
 	return;
