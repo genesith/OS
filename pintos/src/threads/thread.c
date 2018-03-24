@@ -54,9 +54,14 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
-/* If false (default), use round-robin scheduler.
-   If true, use multi-level feedback queue scheduler.
-   Controlled by kernel command-line option "-o mlfqs". */
+struct next_highest_prio
+  {
+    int priority;
+    struct thread * prio_thread;
+  };
+
+
+static struct next_highest_prio * max;
 bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
@@ -98,6 +103,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  max = malloc(sizeof(struct next_highest_prio));
+  memset(&max, 0, sizeof(struct next_highest_prio));
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -240,11 +247,24 @@ void
 thread_unblock (struct thread *t) 
 {
   enum intr_level old_level;
-
+  int a;
+  int b;
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+  
+  a = t->priority;
+  b = max -> priority;
+  if (a >=b)
+  //if (t->priority >= max->priority)
+    {
+     printf("%d\n", a);
+     max->prio_thread = t;
+     printf("%d\n", b);
+     max->priority = t->priority;
+    }
+
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
@@ -496,7 +516,8 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    return max->prio_thread;
+   // return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
