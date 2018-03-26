@@ -99,6 +99,7 @@ timer_sleep (int64_t ticks)
 {
   int64_t start = timer_ticks ();
   struct thread * t = thread_current();
+  
   if(ticks > 0){
 //	ASSERT (intr_get_level () == INTR_OFF); 
 	intr_disable();
