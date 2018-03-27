@@ -62,13 +62,15 @@ static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
-static bool is_thread (struct thread *) UNUSED;
+bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 void insert_readylist(struct thread * t);
 void insert_tolist(struct list_elem * t, struct list * dest);
+void insert_tolist2(struct list_elem * t, struct list * dest);
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -350,6 +352,7 @@ thread_set_priority (int new_priority)
 {
 
   thread_current ()->priority = new_priority;
+  thread_current ()->original_priority = new_priority;
   thread_yield();
   	
 }
@@ -456,7 +459,7 @@ running_thread (void)
 }
 
 /* Returns true if T appears to point to a valid thread. */
-static bool
+bool
 is_thread (struct thread *t)
 {
   return t != NULL && t->magic == THREAD_MAGIC;
@@ -476,7 +479,9 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->original_priority = priority;
   t->magic = THREAD_MAGIC;
+  list_init(&t->donor_list);
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -595,6 +600,7 @@ allocate_tid (void)
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
+
 void insert_tolist(struct list_elem * t, struct list * dest){
   
   int cnt = 0;
@@ -625,23 +631,24 @@ void insert_tolist(struct list_elem * t, struct list * dest){
 };
 
 
-void insert_readylist(struct thread * t){
+
+void insert_tolist2(struct list_elem * t, struct list * dest){
   
   int cnt = 0;
   struct list_elem * temp;
   
-  if (list_empty(&ready_list)){
-  	list_push_back(&ready_list, &t->elem);
+  if (list_empty(dest)){
+  	list_push_back(dest, t);
 	cnt = 1;
   }
 
   else{
-    for (temp = list_begin(&ready_list); temp != list_end(&ready_list); temp = list_next(temp)){
-  	  struct thread * target = list_entry(temp, struct thread, elem);
+    for (temp = list_begin(dest); temp != list_end(dest); temp = list_next(temp)){
+  	  struct semaphore_elem * target = list_entry(temp, struct semaphore_elem, elem);
 //	  printf("target : %d, input : %d", target->priority, t->priority);
-	  if ((t-> priority) > (target->priority)){
+	  if ((list_entry(t, struct semaphore_elem, elem)-> priority) > (target->priority)){
 //	    printf("target : %d, input : %d", target->priority, t->priority);
-		list_insert(&target->elem, &t->elem);
+		list_insert(&target->elem, t);
 		cnt = 1;
 	    break;
 	  }
@@ -649,7 +656,9 @@ void insert_readylist(struct thread * t){
   }
 
   if (cnt == 0){
-  	list_push_back(&ready_list, &t->elem);
+  	list_push_back(dest, t);
   }
   return;
 };
+
+
