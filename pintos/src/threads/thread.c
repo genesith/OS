@@ -67,7 +67,8 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-
+void insert_readylist(struct thread * t);
+void insert_tolist(struct list_elem * t, struct list * dest);
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -206,7 +207,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-
+  thread_yield();
   return tid;
 }
 
@@ -237,38 +238,19 @@ thread_block (void)
 void
 thread_unblock (struct thread *t) 
 {
-  int cnt = 0;
   enum intr_level old_level;
-  struct list_elem * temp;
+//  struct list_elem * temp;
   ASSERT (is_thread (t));
-
+ 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  if (list_empty(&ready_list)){
-  	list_push_back(&ready_list, &t->elem);
-	cnt = 1;
-  }
-
-  else{
-    for (temp = list_begin(&ready_list); temp != list_end(&ready_list); temp = list_next(temp)){
-  	  struct thread * target = list_entry(temp, struct thread, elem);
-//	  printf("target : %d, input : %d", target->priority, t->priority);
-	  if ((t-> priority) >= (target->priority)){
-//	    printf("target : %d, input : %d", target->priority, t->priority);
-		list_insert(&target->elem, &t->elem);
-		cnt = 1;
-	    break;
-	  }
-  	}
-  }
-
-  if (cnt == 0){
-  	list_push_back(&ready_list, &t->elem);
-  }
-
+  insert_tolist(&t->elem, &ready_list);
+//  insert_readylist(t);
 //  list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+//  if (!(strstr(t->name, "idle")))
+//  	thread_yield();
 }
 
 /* Returns the name of the running thread. */
@@ -297,7 +279,7 @@ thread_current (void)
   return t;
 }
 
-/* Returns the running thread's tid. */
+//* Returns the running thread's tid. */
 tid_t
 thread_tid (void) 
 {
@@ -337,7 +319,9 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+//	  list_push_back(&ready_list, &cur->elem);
+//     insert_readylist(cur);
+      insert_tolist(&cur->elem, &ready_list);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -364,7 +348,10 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+
   thread_current ()->priority = new_priority;
+  thread_yield();
+  	
 }
 
 /* Returns the current thread's priority. */
@@ -607,3 +594,62 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+void insert_tolist(struct list_elem * t, struct list * dest){
+  
+  int cnt = 0;
+  struct list_elem * temp;
+  
+  if (list_empty(dest)){
+  	list_push_back(dest, t);
+	cnt = 1;
+  }
+
+  else{
+    for (temp = list_begin(dest); temp != list_end(dest); temp = list_next(temp)){
+  	  struct thread * target = list_entry(temp, struct thread, elem);
+//	  printf("target : %d, input : %d", target->priority, t->priority);
+	  if ((list_entry(t, struct thread, elem)-> priority) > (target->priority)){
+//	    printf("target : %d, input : %d", target->priority, t->priority);
+		list_insert(&target->elem, t);
+		cnt = 1;
+	    break;
+	  }
+  	}
+  }
+
+  if (cnt == 0){
+  	list_push_back(dest, t);
+  }
+  return;
+};
+
+
+void insert_readylist(struct thread * t){
+  
+  int cnt = 0;
+  struct list_elem * temp;
+  
+  if (list_empty(&ready_list)){
+  	list_push_back(&ready_list, &t->elem);
+	cnt = 1;
+  }
+
+  else{
+    for (temp = list_begin(&ready_list); temp != list_end(&ready_list); temp = list_next(temp)){
+  	  struct thread * target = list_entry(temp, struct thread, elem);
+//	  printf("target : %d, input : %d", target->priority, t->priority);
+	  if ((t-> priority) > (target->priority)){
+//	    printf("target : %d, input : %d", target->priority, t->priority);
+		list_insert(&target->elem, &t->elem);
+		cnt = 1;
+	    break;
+	  }
+  	}
+  }
+
+  if (cnt == 0){
+  	list_push_back(&ready_list, &t->elem);
+  }
+  return;
+};
