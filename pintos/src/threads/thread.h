@@ -96,6 +96,7 @@ struct thread
 	struct list_elem wait_elem;
 	struct list_elem donor_elem;
 	struct list donor_list;
+	struct thread * donee;
 	int wakeup_time;
 
 #ifdef USERPROG
@@ -111,7 +112,7 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-
+struct list ready_list;
 void thread_init (void);
 void thread_start (void);
 

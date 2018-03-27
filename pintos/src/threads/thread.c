@@ -22,7 +22,7 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
-static struct list ready_list;
+//struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -482,6 +482,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->original_priority = priority;
   t->magic = THREAD_MAGIC;
   list_init(&t->donor_list);
+  t->donee = NULL;
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -615,11 +616,10 @@ void insert_tolist(struct list_elem * t, struct list * dest){
     for (temp = list_begin(dest); temp != list_end(dest); temp = list_next(temp)){
   	  struct thread * target = list_entry(temp, struct thread, elem);
 //	  printf("target : %d, input : %d", target->priority, t->priority);
-	  if ((list_entry(t, struct thread, elem)-> priority) > (target->priority)){
-//	    printf("target : %d, input : %d", target->priority, t->priority);
-		list_insert(&target->elem, t);
+	  if (((!(list_empty(&target->donor_list))) && (list_begin(&target->donor_list) == &list_entry(t, struct thread, elem) -> donor_elem)) || ((list_entry(t, struct thread, elem) -> priority) > (target->priority))){
+	  	list_insert(&target->elem, t);
 		cnt = 1;
-	    break;
+		break;
 	  }
   	}
   }

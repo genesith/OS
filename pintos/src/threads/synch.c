@@ -203,7 +203,8 @@ lock_acquire (struct lock *lock)
   	if ((lock->holder)->priority < thread_current()->priority){
 	//	(lock->holder)->original_priority = (lock->holder)->priority;
 		(lock->holder)->priority = thread_current()->priority;
-		insert_tolist(&thread_current()->donor_elem,&(lock->holder)->donor_list);
+		insert_tolist(&thread_current()->donor_elem, &(lock->holder)->donor_list);
+		thread_current()->donee = lock->holder;
 	}	
   }
   
@@ -242,21 +243,28 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 //  list_begin(&(lock->semaphore).waiters);
-  if(!(list_empty(&(lock->semaphore).waiters))){
-  	
-  	list_remove(&(list_entry(list_begin(&(lock->semaphore).waiters), struct thread, elem))->donor_elem);
-  	if (list_empty(&thread_current()->donor_list)){
-  		thread_current()->priority = thread_current()->original_priority;
-  	}
+  struct thread * target = thread_current()->donee;
+//  if((!(list_empty(&(lock->semaphore).waiters)))&&(is_thread(target))){
+    if(target){ 	
+//  	  list_remove(&(list_entry(list_begin(&(lock->semaphore).waiters), struct thread, elem))->donor_elem);
+      list_remove(&thread_current()->donor_elem);	
+	  if (list_empty(&target->donor_list)){
+  		target->priority = target->original_priority;
+//		printf("YEAH : %d\n", target->priority);
+  	  }
 
-  	else{
- //   list_remove(&(list_entry(list_begin(&(lock->semaphore).waiters), struct thread, elem))->donor_elem);
+  	  else{
+  		target->priority = list_entry(list_begin(&target->donor_list), struct thread, donor_elem)->priority;
+//		printf("HERE : %d\n", target->priority);
+  	  }
 
-  		thread_current()->priority = list_entry(list_begin(&thread_current()->donor_list), struct thread, donor_elem)->priority;
-  	}
-  }
-  lock->holder = NULL;
-  sema_up (&lock->semaphore);
+	  list_remove(&target->elem);
+	  insert_tolist(&target->elem, &ready_list);
+
+
+    }
+    lock->holder = NULL;
+    sema_up (&lock->semaphore);
 }
 
 /* Returns true if the current thread holds LOCK, false
