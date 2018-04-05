@@ -201,10 +201,48 @@ lock_acquire (struct lock *lock)
   
   if(is_thread(lock->holder)){
   	if ((lock->holder)->priority < thread_current()->priority){
-	//	(lock->holder)->original_priority = (lock->holder)->priority;
 		(lock->holder)->priority = thread_current()->priority;
 		insert_tolist(&thread_current()->donor_elem, &(lock->holder)->donor_list);
 		thread_current()->donee = lock->holder;
+		
+		struct list_elem * target_elem = &(lock->holder)->elem;
+		struct list_elem * prev_elem = target_elem->prev;
+		struct thread * target_thread = list_entry(target_elem, struct thread, elem);
+			
+		while (prev_elem->prev != NULL){
+			if (list_entry(prev_elem, struct thread, elem)->priority < target_thread->priority){
+				prev_elem = prev_elem->prev;
+			}
+			else
+				break;
+			}
+
+		list_remove(target_elem);
+		list_insert(prev_elem->next, target_elem);
+
+		struct thread * temp = lock->holder;
+
+		while (is_thread(temp->donee)){
+//			printf("WHY????????????????????????\n");
+			struct thread * raise = temp->donee;
+			raise->priority = temp->priority;
+
+			struct list_elem * target_elem = &raise->elem;
+			struct list_elem * prev_elem = target_elem->prev;
+			struct thread * target_thread = list_entry(target_elem, struct thread, elem);
+			
+			while (prev_elem->prev != NULL){
+				if (list_entry(prev_elem, struct thread, elem)->priority < target_thread->priority){
+					prev_elem = prev_elem->prev;
+				}
+				else
+					break;
+			}
+
+			list_remove(target_elem);
+			list_insert(prev_elem->next, target_elem);
+			temp = raise;
+	  }
 	}	
   }
   
@@ -242,27 +280,24 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
-//  list_begin(&(lock->semaphore).waiters);
   struct thread * target = thread_current()->donee;
-//  if((!(list_empty(&(lock->semaphore).waiters)))&&(is_thread(target))){
-    if(target){ 	
-//  	  list_remove(&(list_entry(list_begin(&(lock->semaphore).waiters), struct thread, elem))->donor_elem);
+    if(is_thread(target)){ 	
       list_remove(&thread_current()->donor_elem);	
 	  if (list_empty(&target->donor_list)){
   		target->priority = target->original_priority;
-//		printf("YEAH : %d\n", target->priority);
   	  }
 
   	  else{
-  		target->priority = list_entry(list_begin(&target->donor_list), struct thread, donor_elem)->priority;
-//		printf("HERE : %d\n", target->priority);
-  	  }
+  		
+		  target->priority = list_entry(list_begin(&target->donor_list), struct thread, donor_elem)->priority;
+  	  
+	  }
 
 	  list_remove(&target->elem);
 	  insert_tolist(&target->elem, &ready_list);
-
-
+	  
     }
+
     lock->holder = NULL;
     sema_up (&lock->semaphore);
 }
