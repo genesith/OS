@@ -105,6 +105,7 @@ timer_sleep (int64_t ticks)
 	intr_disable();
   	put_waitlist(t, start+ticks);
   	thread_block();
+//	intr_enable();
   }
   
 
