@@ -6,6 +6,7 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "threads/synch.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -29,6 +30,8 @@ filesys_init (bool format)
 
   free_map_open ();
 }
+
+
 
 /* Shuts down the file system module, writing any unwritten data
    to disk. */
@@ -66,12 +69,18 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
+  // printf("%s\n", name);
+  // printf("0\n");
   struct dir *dir = dir_open_root ();
   struct inode *inode = NULL;
-
+  // printf("1\n");
   if (dir != NULL)
+    // printf("2\n");
     dir_lookup (dir, name, &inode);
+  // printf("3\n");
   dir_close (dir);
+  // printf("4\n");
+  // printf("%d\n", (inode==NULL));
 
   return file_open (inode);
 }

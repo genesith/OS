@@ -22,11 +22,10 @@
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
-//struct list ready_list;
+static struct list ready_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
-static struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -54,6 +53,9 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+/* If false (default), use round-robin scheduler.
+   If true, use multi-level feedback queue scheduler.
+   Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
 static void kernel_thread (thread_func *, void *aux);
@@ -62,14 +64,11 @@ static void idle (void *aux UNUSED);
 static struct thread *running_thread (void);
 static struct thread *next_thread_to_run (void);
 static void init_thread (struct thread *, const char *name, int priority);
-bool is_thread (struct thread *) UNUSED;
+static bool is_thread (struct thread *) UNUSED;
 static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
-void insert_readylist(struct thread * t);
-void insert_tolist(struct list_elem * t, struct list * dest);
-void insert_tolist2(struct list_elem * t, struct list * dest);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -98,7 +97,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-//  memset(&max, 0, sizeof(max));
+  sema_init(&initial_thread->child_sema, 0);
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -176,6 +176,7 @@ thread_create (const char *name, int priority,
 
   ASSERT (function != NULL);
 
+
   /* Allocate thread. */
   t = palloc_get_page (PAL_ZERO);
   if (t == NULL)
@@ -184,6 +185,11 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  t->parent_thread = thread_current();
+  sema_init(&t->child_sema, 0);
+  sema_init(&t->fd_list_lock, 1);
+  // sema_down(&t->process_sema);
+
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -209,10 +215,24 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-  thread_yield();
+  // thread_yield();
+
   return tid;
 }
 
+struct thread * search_by_tid(int tid){
+  struct list_elem * temp;
+  for (temp = list_begin(&all_list); temp != list_end(&all_list) ; temp = list_next(temp)){
+    struct thread * t = list_entry(temp, struct thread, allelem);
+    if (t->tid == tid){
+      return t;
+    }
+
+  }
+  // printf("HERE???");
+  return NULL;
+
+}
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
@@ -241,18 +261,14 @@ void
 thread_unblock (struct thread *t) 
 {
   enum intr_level old_level;
-//  struct list_elem * temp;
+
   ASSERT (is_thread (t));
- 
+
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  insert_tolist(&t->elem, &ready_list);
-//  insert_readylist(t);
-//  list_push_back (&ready_list, &t->elem);
+  list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
-  //if (!(strstr(t->name, "idle")))
-  //	thread_yield();
 }
 
 /* Returns the name of the running thread. */
@@ -281,7 +297,7 @@ thread_current (void)
   return t;
 }
 
-//* Returns the running thread's tid. */
+/* Returns the running thread's tid. */
 tid_t
 thread_tid (void) 
 {
@@ -304,7 +320,10 @@ thread_exit (void)
      when it calls thread_schedule_tail(). */
   intr_disable ();
   list_remove (&thread_current()->allelem);
+  // printf("Name : %s\n", thread_current()->name);
   thread_current ()->status = THREAD_DYING;
+  
+
   schedule ();
   NOT_REACHED ();
 }
@@ -321,9 +340,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-//	  list_push_back(&ready_list, &cur->elem);
-//     insert_readylist(cur);
-      insert_tolist(&cur->elem, &ready_list);
+    list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -350,13 +367,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-
-  struct thread * target = list_entry(list_begin(&thread_current()->donor_list), struct thread, donor_elem);
-  if(target->priority < new_priority)
-  	thread_current ()->priority = new_priority;
-  thread_current ()->original_priority = new_priority;
-  thread_yield();
-  	
+  thread_current ()->priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
@@ -461,7 +472,7 @@ running_thread (void)
 }
 
 /* Returns true if T appears to point to a valid thread. */
-bool
+static bool
 is_thread (struct thread *t)
 {
   return t != NULL && t->magic == THREAD_MAGIC;
@@ -479,12 +490,11 @@ init_thread (struct thread *t, const char *name, int priority)
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
+  t->last_fd = 1;
+  list_init(&t->fd_list);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  t->original_priority = priority;
   t->magic = THREAD_MAGIC;
-  list_init(&t->donor_list);
-  t->donee = NULL;
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -512,11 +522,10 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry(list_pop_front(&ready_list), struct thread, elem);
-   // return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 
-/* Completes a thread/ switch by activating the new thread's page
+/* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
    At this function's invocation, we just switched from thread
@@ -602,65 +611,3 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
-
-
-void insert_tolist(struct list_elem * t, struct list * dest){
-  
-  int cnt = 0;
-  struct list_elem * temp;
-  
-  if (list_empty(dest)){
-  	list_push_back(dest, t);
-	cnt = 1;
-  }
-
-  else{
-    for (temp = list_begin(dest); temp != list_end(dest); temp = list_next(temp)){
-  	  struct thread * target = list_entry(temp, struct thread, elem);
-//	  printf("target : %d, input : %d", target->priority, t->priority);
-	  if (((!(list_empty(&target->donor_list))) && (list_begin(&target->donor_list) == &list_entry(t, struct thread, elem) -> donor_elem)) || ((list_entry(t, struct thread, elem) -> priority) > (target->priority))){
-	  	list_insert(&target->elem, t);
-		cnt = 1;
-		break;
-	  }
-  	}
-  }
-
-  if (cnt == 0){
-  	list_push_back(dest, t);
-  }
-  return;
-};
-
-
-
-void insert_tolist2(struct list_elem * t, struct list * dest){
-  
-  int cnt = 0;
-  struct list_elem * temp;
-  
-  if (list_empty(dest)){
-  	list_push_back(dest, t);
-	cnt = 1;
-  }
-
-  else{
-    for (temp = list_begin(dest); temp != list_end(dest); temp = list_next(temp)){
-  	  struct semaphore_elem * target = list_entry(temp, struct semaphore_elem, elem);
-//	  printf("target : %d, input : %d", target->priority, t->priority);
-	  if ((list_entry(t, struct semaphore_elem, elem)-> priority) > (target->priority)){
-//	    printf("target : %d, input : %d", target->priority, t->priority);
-		list_insert(&target->elem, t);
-		cnt = 1;
-	    break;
-	  }
-  	}
-  }
-
-  if (cnt == 0){
-  	list_push_back(dest, t);
-  }
-  return;
-};
-
-

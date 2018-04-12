@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -17,7 +18,9 @@ enum thread_status
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
+// struct list all_threads;
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
+static struct list all_list;
 
 /* Thread priorities. */
 #define PRI_MIN 0                       /* Lowest priority. */
@@ -88,16 +91,20 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-	int original_priority;
+    // struct list child_process;
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
-    struct list_elem elem; /* List element. */
-	struct list_elem wait_elem;
-	struct list_elem donor_elem;
-	struct list donor_list;
-	struct thread * donee;
-	int wakeup_time;
+    struct list_elem elem;              /* List element. */
+    // struct list_elem thread_elem;
+    // struct list_elem parent;
+    struct semaphore child_sema;
+    struct thread * parent_thread;
+    int last_fd;
+    struct list fd_list;
+    int child_return;
+    struct semaphore fd_list_lock;
+    int exit_normal;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -112,7 +119,7 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
-struct list ready_list;
+struct thread * search_by_tid(int tid);
 void thread_init (void);
 void thread_start (void);
 
@@ -143,7 +150,5 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-void insert_tolist(struct list_elem  * t, struct list * dest);
-void insert_tolist2(struct list_elem *t, struct list * dest);
-bool is_thread(struct thread *t);
+
 #endif /* threads/thread.h */
