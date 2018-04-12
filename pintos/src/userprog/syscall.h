@@ -8,6 +8,7 @@
 
 
 void syscall_init (void);
+bool check_invalid_pointer(void * addr);
 
 struct fd_struct {
 	int fd;
