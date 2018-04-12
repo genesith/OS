@@ -17,7 +17,7 @@ struct fd_struct * find_by_fd(int fd);
 int allocate_fd(void);
 
 void exit(int status);
-// void remove_fd(int fd);
+bool check_invalid_pointer(void * addr);
 
 void
 syscall_init (void) 
@@ -34,6 +34,12 @@ syscall_handler (struct intr_frame *f UNUSED)
   int param2 = *((int *)(f->esp)+ 2);
   int param3 = *((int *)(f->esp)+ 3);
   
+  if (check_invalid_pointer((int *) f->esp)){
+    f->eax = -1;
+    exit(-1);
+
+  }
+
   switch(syscall_num){
   	case SYS_HALT:
 
@@ -60,6 +66,12 @@ syscall_handler (struct intr_frame *f UNUSED)
 
       char command[50];
       // printf("param1 : %s\n", (char *)param1);
+      if (check_invalid_pointer((void *) param1)){
+        f->eax = -1;
+        exit(-1);
+        break;
+      }
+
       strlcpy(command, (char *)param1, strlen((char *)param1)+1);
   		int pid = process_execute(command);
       // printf("param1:%s\n", param1);
@@ -101,6 +113,12 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_CREATE:
     {
       
+      if (check_invalid_pointer((void *) param1)){
+        f->eax = -1;
+        exit(-1);
+        break;
+      }
+
 
       bool result = filesys_create((char *)param1, (off_t) param2);
       f->eax = result;
@@ -111,6 +129,12 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_REMOVE:
   	{
 
+      if (check_invalid_pointer((void *) param1)){
+        f->eax = -1;
+        exit(-1);
+        break;
+      }
+
       bool result = filesys_remove((char *)param1);
       f->eax = result;
       break;
@@ -120,6 +144,13 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_OPEN:
   	{
       
+      if (check_invalid_pointer((void *) param1)){
+        f->eax = -1;
+        exit(-1);
+        break;
+      }
+
+
       struct file * target_file;
       if ((target_file = filesys_open((char *)param1))){
         struct fd_struct * file_fd = malloc(sizeof(struct fd_struct));
@@ -170,6 +201,13 @@ syscall_handler (struct intr_frame *f UNUSED)
           f->eax = -1;
           break;
         }
+
+        if (check_invalid_pointer((void *) param2)){
+          f->eax = -1;
+          exit(-1);
+          break;
+        }
+
         
         int size = file_read(target_struct->the_file, (void *)param2, (unsigned) param3);
         f->eax = size;
@@ -180,6 +218,13 @@ syscall_handler (struct intr_frame *f UNUSED)
   	
   	case SYS_WRITE:
   	{
+
+      if (check_invalid_pointer((void *) param2)){
+        f->eax = -1;
+        exit(-1);
+        break;
+      }
+
       if (param1 == 1){
         putbuf((char *)param2, param3);
         f->eax = param3;
@@ -245,6 +290,13 @@ syscall_handler (struct intr_frame *f UNUSED)
       
       break;
     }
+
+    default:
+    {
+      f->eax = -1;
+      break;
+    }
+  
   }
   
 }
@@ -275,7 +327,7 @@ int allocate_fd(void){
   sema_up(&thread_current()->fd_list_lock);
   
   return fd;
-}
+}if
 
 
 
@@ -287,4 +339,10 @@ void exit(int status){
   printf("%s: exit(%d)\n", thread_current()->name, status);
   sema_up(&thread_current()->child_sema);
   thread_exit ();
+}
+
+bool check_invalid_pointer(void * addr){
+  if (addr > PHYS_BASE)
+    return 1;
+  return 0;
 }
