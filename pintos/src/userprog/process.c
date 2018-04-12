@@ -28,7 +28,11 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
+  // printf("file_name : %s\n", file_name);
   char *fn_copy;
+  char * temp;
+  char * next;
+
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -37,11 +41,16 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  // printf("len : %d\n", strlen(fn_copy));
+  // printf("file_name : %s\n", file_name);
+  temp = strtok_r(file_name, " ", &next);
+  // printf("temp : %s\n", temp);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (temp, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
+
     palloc_free_page (fn_copy); 
+  
   return tid;
 }
 
@@ -50,6 +59,7 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
+  // printf("%s\n", (char *)file_name_);
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -59,10 +69,12 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  // printf("HERERERE!!!\n");
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+  // printf("hehehe7\n");
   if (!success) 
     thread_exit ();
 
@@ -72,7 +84,12 @@ start_process (void *file_name_)
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
+  // hex_dump(if_.esp, if_.esp, 500, true);
+  // hex_dump(if_.eip, if_.eip, 500, true);
+
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+  // hex_dump(if_.esp, if_.esp, 500, true);
+
   NOT_REACHED ();
 }
 
@@ -88,10 +105,13 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct thread * child_thread = search_by_tid(child_tid);
+  sema_down(&child_thread->child_sema);
+
 }
 
 /* Free the current process's resources. */
+
 void
 process_exit (void)
 {
@@ -195,7 +215,9 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+#define MAX_ARGV 100
+
+static bool setup_stack (void **esp, char * file_name);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -213,8 +235,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
   struct file *file = NULL;
   off_t file_ofs;
   bool success = false;
+  char * temp;
+  char * next;
   int i;
+  char dup_filename[MAX_ARGV];
 
+  // printf("xe");
+  strlcpy(dup_filename, file_name, MAX_ARGV);
+
+  // printf("ye");
+  
+  // printf("dup:%s\n", dup_filename);
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
@@ -222,7 +253,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  file = filesys_open (file_name);
+  temp = strtok_r(file_name, " ", &next);
+  // printf("Temp : %s\n", temp);
+  // printf("Parent : %s, memcmp : %s\n", t->parent_thread->name, t->name);
+  file = filesys_open(temp);
+  // / / printf("hahah\n");
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
@@ -242,6 +277,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
+    // printf("hehehe\n");
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
@@ -300,10 +336,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
           break;
         }
     }
-
+  // printf("hehehe2\n");
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, dup_filename))
     goto done;
+
+
+  // printf("hehehe3\n");
+
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
@@ -312,7 +352,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  // printf("hehehe5\n");
   file_close (file);
+  // printf("hehehe5\n");
   return success;
 }
 
@@ -427,8 +469,35 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
-{
+setup_stack (void **esp, char * file_name) 
+{ 
+  char dup_argv[MAX_ARGV];
+  strlcpy(dup_argv, file_name, MAX_ARGV);
+  char * temp;
+  char * next;
+  int index = 0;
+  int argc = 0;
+  int total_argv_len = 0;
+  int stack_off;
+  int word_align;
+  
+  // printf("file_name for setup_stack : %s, dup : %s\n", file_name, dup_argv);
+  temp = strtok_r(dup_argv, " ", &next);
+
+  while(temp){
+     
+    // printf("argv : %s, strlen : %d\n", temp, strlen(temp));
+    total_argv_len += strlen(temp) + 1;
+    temp = strtok_r(NULL, " ", &next);
+    argc += 1;
+  }
+  
+  word_align = (4 - (total_argv_len & 3))%4;
+  // printf("word_align : %d, argc : %d\n", word_align, argc);
+
+  stack_off = total_argv_len + word_align + (argc+4) * 4;
+  // printf("stack_offset : %d\n", stack_off);
+
   uint8_t *kpage;
   bool success = false;
 
@@ -441,6 +510,35 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+
+  *esp -= stack_off;
+
+  // printf("%c, %s, %x", (char **)esp, (char *)*esp, (char)**esp);
+  // printf("stack_offset : %s\n", stack_offset);
+  
+  // memset(*esp, 0, 4);
+  *(*(int **)esp+1) = argc;
+  *(*(int **)esp+2) = *esp + 12;
+  *(*(int **)esp+argc+3) = 0;
+  memset(*esp+(argc+4)*4, 0, word_align);
+  temp = strtok_r(file_name, " ", &next);
+  
+  char * while_pointer;
+  while_pointer = *esp + (argc+4)*4 + word_align; 
+    while(temp){
+
+      strlcpy(while_pointer, temp, strlen(temp)+1);
+      *(*(int **)esp + 3 + index) = while_pointer;
+      index++;
+      while_pointer += (strlen(temp) + 1);
+      temp = strtok_r(NULL, " ", &next);
+  }
+
+  // char buf[1024];
+  // hex_dump(0, *esp, stack_off, true);
+  // *esp -= 8;
+  // printf("esp : %x\n", *esp);
+
   return success;
 }
 
