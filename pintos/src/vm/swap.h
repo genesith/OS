@@ -1,11 +1,12 @@
 #include <list.h>
 #include <stdint.h>
+#include "devices/block.h"
 
 struct swap_struct {
    bool empty;
-   struct list references;
+   struct list * references;
 };
 
-int total_sector_number;
+extern block_sector_t total_sector_number;
 
 uint8_t * global_swap_table;
