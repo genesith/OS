@@ -22,7 +22,7 @@ void init_swap_table () {
 }
 
 // Look at the swap table, and find an empty swap sector and return its number
-int get_free_swap () {
+block_sector_t get_free_swap () {
    static int last_search = 0;
    int temp2, temp;
    for (temp = 0; temp < total_sector_number; temp ++){
@@ -44,3 +44,5 @@ void swap_out(block_sector_t sector_num, struct list * refs, uint8_t * kaddr){
 	this_struct -> empty =false;
 	this_struct -> references = refs;
 }
+
+
