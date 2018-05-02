@@ -5,6 +5,10 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/syscall.h"
+#include "userprog/process.h"
+#include "vm/invalidlist.h"
+#include "vm/frame.h"
+#include "vm/swap.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -149,7 +153,33 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  frame_allocate();
+  uint8_t * new_addr = frame_allocate();
+  
+  // Swaped out page --> Swap in
+  int sector_num = invalid_list_check((uint8_t *) fault_addr);
+  if (sector_num >= 0){
+    struct list * references = swap_in(new_addr, sector_num);
+    invalid_list_remove(references);
+
+  }
+  
+  // Do we have to Convert fault_address to index ????
+
+  install_page(fault_addr, (void *) new_addr, );
+
+
+
+
+
+  /*
+  1. Check faulted address is in invalid_list
+    - If exist, swap in to the new physical memory, update Invalid_list(Delete it)
+    - If not, continue
+
+  2. Page Install - Insert to page table, FIFO List 
+
+  */
+
 
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
