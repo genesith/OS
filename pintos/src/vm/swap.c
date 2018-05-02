@@ -2,6 +2,7 @@
 #include "vm/swap.h"
 #include <stdint.h>
 
+/* At initialization, create a swap table by getting the number of total sectors used as swap*/
 
 void init_swap_table (int total_sectors) {
    int total_sector_number = total_sectors;
