@@ -17,6 +17,9 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "userprog/syscall.h"
+#include "vm/frame.h"
+#include "threads/pte.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -46,11 +49,15 @@ process_execute (const char *file_name)
   temp = strtok_r(file_name, " ", &next);
   // printf("temp : %s\n", temp);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (temp, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  // free(temp);
+  if (tid == TID_ERROR){
 
+    // printf("fail??\n");
     palloc_free_page (fn_copy); 
-  
+    
+    }
+
   return tid;
 }
 
@@ -71,6 +78,11 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   // printf("HERERERE!!!\n");
   success = load (file_name, &if_.eip, &if_.esp);
+  if (strcmp(thread_current()->parent_thread->name, "main")){
+    sema_up(&(thread_current()->parent_thread)->exec_sema);
+    intr_disable();
+    thread_block();
+  }
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -105,9 +117,10 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  // printf("wait for %d\n", child_tid);
   struct thread * child_thread = search_by_tid(child_tid);
   sema_down(&child_thread->child_sema);
-
+  // printf("done\n");
 }
 
 /* Free the current process's resources. */
@@ -230,6 +243,9 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
+
+  // printf("LOADING!!!!!!\n");
+
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
   struct file *file = NULL;
@@ -256,13 +272,20 @@ load (const char *file_name, void (**eip) (void), void **esp)
   temp = strtok_r(file_name, " ", &next);
   // printf("Temp : %s\n", temp);
   // printf("Parent : %s, memcmp : %s\n", t->parent_thread->name, t->name);
-  file = filesys_open(temp);
+  // printf("thread_current : %s, tid : %d\n", thread_current()->name, thread_current()->tid);
+  // free(temp);
+  file = filesys_open(file_name);
   // / / printf("hahah\n");
   if (file == NULL) 
     {
+      // printf("1\n");
       printf ("load: %s: open failed\n", file_name);
+      thread_current()->parent_thread->exec_normal = -1;
+      // exit(-1);
       goto done; 
     }
+
+  // file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -339,8 +362,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   // printf("hehehe2\n");
   /* Set up stack. */
   if (!setup_stack (esp, dup_filename))
+    
     goto done;
-
 
   // printf("hehehe3\n");
 
@@ -349,12 +372,22 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
+  file->inode->open_cnt++;
+  file_deny_write(file);
+  file->inode->deny_write_cnt += 1;
+  t->exec_inode = file->inode;
 
  done:
+  // free(dup_filename);
   /* We arrive here whether the load is successful or not. */
   // printf("hehehe5\n");
+
+
+  // printf("%d\n", t->exec_inode->deny_write_cnt);
   file_close (file);
+  // printf("%d\n", t->exec_inode->deny_write_cnt);
   // printf("hehehe5\n");
+  // t->code_write = 1;
   return success;
 }
 
@@ -458,6 +491,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
           return false; 
         }
 
+      // frame_insert(kpage, upage);
+
+
+
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
@@ -534,6 +571,7 @@ setup_stack (void **esp, char * file_name)
       temp = strtok_r(NULL, " ", &next);
   }
 
+  // free(temp);
   // char buf[1024];
   // hex_dump(0, *esp, stack_off, true);
   // *esp -= 8;
@@ -558,6 +596,23 @@ install_page (void *upage, void *kpage, bool writable)
 
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
-  return (pagedir_get_page (t->pagedir, upage) == NULL
-          && pagedir_set_page (t->pagedir, upage, kpage, writable));
+
+  bool result = pagedir_get_page (t->pagedir, upage) == NULL && pagedir_set_page (t->pagedir, upage, kpage, writable);
+  if(result){
+
+    struct frame_struct * target_frame = (struct frame_struct * ) malloc(sizeof(struct frame_struct));
+    // target_frame = (struct frame_struct *) (frame_table + index * sizeof(struct frame_struct));
+
+    // target_frame->free = false;
+    target_frame->kernel_address = (uint32_t *) ((uint32_t)kpage & BITMASK(12, 20));
+    struct reference_struct * reference = (struct reference_struct * )malloc(sizeof(struct reference_struct));
+    reference->tid = t->tid;
+    reference->virtual_address = (uint32_t *) ((uint32_t)upage & BITMASK(12, 20));
+
+    list_push_back(&target_frame->references, &reference->reference_elem);
+    list_push_back(&FIFO_list, &target_frame->FIFO_elem);
+  }
+
+
+  return result;
 }

@@ -39,7 +39,7 @@ file_reopen (struct file *file)
 }
 
 /* Closes FILE. */
-void
+void  
 file_close (struct file *file) 
 {
   if (file != NULL)
@@ -115,10 +115,12 @@ file_write_at (struct file *file, const void *buffer, off_t size,
 void
 file_deny_write (struct file *file) 
 {
+  // printf("IN file deny of file of address %x!", file);
   ASSERT (file != NULL);
   if (!file->deny_write) 
     {
       file->deny_write = true;
+      // printf("File deny is now true.");
       inode_deny_write (file->inode);
     }
 }

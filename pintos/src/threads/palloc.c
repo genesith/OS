@@ -10,6 +10,8 @@
 #include "threads/loader.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+#include "vm/frame.h"
 
 /* Page allocator.  Hands out memory in page-size (or
    page-multiple) chunks.  See malloc.h for an allocator that
@@ -59,6 +61,10 @@ palloc_init (size_t user_page_limit)
   init_pool (&kernel_pool, free_start, kernel_pages, "kernel pool");
   init_pool (&user_pool, free_start + kernel_pages * PGSIZE,
              user_pages, "user pool");
+  
+  list_init(&FIFO_list);
+  // init_frame(user_pool.base, user_pages);
+
 }
 
 /* Obtains and returns a group of PAGE_CNT contiguous free pages.
@@ -146,7 +152,7 @@ void
 palloc_free_page (void *page) 
 {
   palloc_free_multiple (page, 1);
-}
+} 
 
 /* Initializes pool P as starting at START and ending at END,
    naming it NAME for debugging purposes. */

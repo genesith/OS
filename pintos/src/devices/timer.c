@@ -7,9 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
-
-//test text to see if branch is separate
-
+  
 /* See [8254] for hardware details of the 8254 timer chip. */
 
 #if TIMER_FREQ < 19
@@ -20,20 +18,18 @@
 #endif
 
 /* Number of timer ticks since OS booted. */
-
 static int64_t ticks;
 
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
-static struct list wait_list;
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
-static void put_waitlist(struct thread * t, int64_t wakeup);
-static void check_waitlist();
+
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -41,7 +37,6 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-  list_init (&wait_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -91,26 +86,14 @@ timer_elapsed (int64_t then)
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
-
-/* Append current thread to wait_list with its wake-up time and block it.
-`q*/
 void
 timer_sleep (int64_t ticks) 
 {
   int64_t start = timer_ticks ();
-  struct thread * t = thread_current();
-  
-  if(ticks > 0){
-//	ASSERT (intr_get_level () == INTR_OFF); 
-	intr_disable();
-  	put_waitlist(t, start+ticks);
-  	thread_block();
-//	intr_enable();
-  }
-  
 
-//  while (timer_elapsed (start) < ticks) 
-//    thread_yield ();
+  ASSERT (intr_get_level () == INTR_ON);
+  while (timer_elapsed (start) < ticks) 
+    thread_yield ();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -188,7 +171,6 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  check_waitlist(); // Which one should be executed first????
   thread_tick ();
 }
 
@@ -261,23 +243,4 @@ real_time_delay (int64_t num, int32_t denom)
      the possibility of overflow. */
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
-}
-
-static void put_waitlist(struct thread * t, int64_t wakeup){
-	//struct wait_thread * temp = malloc(sizeof(struct wait_thread));
-	t->wakeup_time = wakeup;
-	list_push_back(&wait_list, &t->wait_elem);
-	return;
-}
-
-static void check_waitlist(){
-	struct list_elem * temp;
-	for (temp = list_begin(&wait_list); temp != list_end(&wait_list); temp = list_next (temp)){
-		struct thread *t = list_entry(temp, struct thread, wait_elem);
-		if(t -> wakeup_time == ticks){
-			thread_unblock(t);
-			list_remove(&t->wait_elem);
-		}
-	}
-	return;
 }

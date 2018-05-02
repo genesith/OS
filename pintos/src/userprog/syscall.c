@@ -4,11 +4,14 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 // #include "userprog/syscall.h"
+#include "threads/vaddr.h"
 #include <user/syscall.h>
 #include "userprog/process.h"
 #include "devices/shutdown.h"
 #include "threads/malloc.h"
 #include <list.h>
+
+// #define PHYS_BASE 0xC0000000;
 
 static void syscall_handler (struct intr_frame *);
 
@@ -28,17 +31,21 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-
-  int syscall_num = *(int *)(f->esp);
-  int param1 = *((int *)(f->esp)+ 1);
-  int param2 = *((int *)(f->esp)+ 2);
-  int param3 = *((int *)(f->esp)+ 3);
-  
-  if (check_invalid_pointer((int *) f->esp)){
+  // printf("HERE!!!\n");
+  if (check_invalid_pointer(f->esp)){
     f->eax = -1;
     exit(-1);
 
   }
+
+  int syscall_num = *(int *)(f->esp);
+
+
+  int param1 = *((int *)(f->esp)+ 1);
+  int param2 = *((int *)(f->esp)+ 2);
+  int param3 = *((int *)(f->esp)+ 3);
+  
+
 
   switch(syscall_num){
   	case SYS_HALT:
@@ -64,8 +71,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_EXEC:
   	{
 
+      char * temp, *next;
       char command[50];
-      // printf("param1 : %s\n", (char *)param1);
+      // printf("param1 : %s\n", (ch`[ar *)param1);
+      // printf("will now print param1 : %s, and esp\n", param1);
+
       if (check_invalid_pointer((void *) param1)){
         f->eax = -1;
         exit(-1);
@@ -73,52 +83,74 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
 
       strlcpy(command, (char *)param1, strlen((char *)param1)+1);
-  		int pid = process_execute(command);
-      // printf("param1:%s\n", param1);
+  		sema_init(&thread_current()->exec_sema, 0);
+      int pid = process_execute(command);
+      // free(command);
+      // printf("1\n");
+      sema_down(&thread_current()->exec_sema);
+      // printf("2\n");
   		if (!(pid)){
         f->eax = -1;
       }
-      else
-        f->eax = pid;
+
+      else if (thread_current()->exec_normal == -1){
+        f->eax = -1;
+        thread_current()->exec_normal = 0;
+      }
+
+      else{
+        // thread_current()->exec_inode->deny_write_cnt++;
+        f->eax = pid;      
+      
+      }
 
       break;
   	}
   	
   	case SYS_WAIT:
   	{
-      thread_current()->exit_normal == 0; 
+      // printf("thread_name : %s, tid : %d, syscall : %d\n", thread_current()->name, thread_current()->tid, syscall_num);
+
+      // printf("hhhahahah\n");
+      thread_current()->exit_normal = 0; 
       int pid = param1;
       struct thread * target_thread = search_by_tid(pid);
       // printf("status : %d, name : %s\n", target_thread->tid, target_thread->name);
+      
+
+
       if (!(target_thread)){
+        // printf("hhhahahah\n");  
         f->eax = -1;
         break;
 
       }
 
+      thread_unblock(target_thread);
+      list_remove(&target_thread->child_elem);
+      // printf("hhhahahah\n");
       process_wait(pid);
-      
-      // sema_down(&target_thread->parent_sema);
-      // printf("HERE!!");
+      // printf("hhhahahah\n");
+      // printf("HERE!!, exit:/ %d\n", thread_current()->exit_normal);
       if (thread_current()->exit_normal == 1){
+        // printf("here!");
         f->eax = thread_current()->child_return;
-
       }
+
       else
         f->eax = -1;
+      
       break;
 
     }
   	
   	case SYS_CREATE:
     {
-      
       if (check_invalid_pointer((void *) param1)){
         f->eax = -1;
         exit(-1);
         break;
       }
-
 
       bool result = filesys_create((char *)param1, (off_t) param2);
       f->eax = result;
@@ -128,7 +160,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   	
   	case SYS_REMOVE:
   	{
-
       if (check_invalid_pointer((void *) param1)){
         f->eax = -1;
         exit(-1);
@@ -156,10 +187,13 @@ syscall_handler (struct intr_frame *f UNUSED)
         struct fd_struct * file_fd = malloc(sizeof(struct fd_struct));
 
         file_fd->fd = allocate_fd();
-        // if (strstr(param1, "rox"))
-        //   target_file->deny_write = true;
-        file_fd->the_file = target_file;
 
+        file_fd->the_file = target_file;
+        if (target_file->inode->deny_write_cnt > 0){
+          file_deny_write(target_file);
+          // target_file->inode->deny_write_cnt++;
+        }
+        sema_init(&file_fd->file_sema, 1);
         list_push_back(&thread_current()->fd_list, &file_fd->fd_elem);
 
         f->eax = file_fd->fd; 
@@ -189,8 +223,11 @@ syscall_handler (struct intr_frame *f UNUSED)
   	
     case SYS_READ:
   	{
-      if (param1 == 1){
+
+      if (param1 == 0){
         input_getc();
+        // f->eax = 0;
+        // exit(0);
       }
 
       else{
@@ -208,9 +245,11 @@ syscall_handler (struct intr_frame *f UNUSED)
           break;
         }
 
-        
+        sema_down(&target_struct->file_sema);  
         int size = file_read(target_struct->the_file, (void *)param2, (unsigned) param3);
         f->eax = size;
+        file_deny_write(target_struct->the_file);
+        sema_up(&target_struct->file_sema);
 
       }
       break;
@@ -218,7 +257,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	
   	case SYS_WRITE:
   	{
-
+      // printf("SysWrite has been called\n");
       if (check_invalid_pointer((void *) param2)){
         f->eax = -1;
         exit(-1);
@@ -232,6 +271,11 @@ syscall_handler (struct intr_frame *f UNUSED)
 
       else{
         struct fd_struct * target_struct = find_by_fd(param1);
+        if (target_struct->the_file->inode->deny_write_cnt > 0)
+          target_struct->the_file->deny_write = 1;
+        else
+          target_struct->the_file->deny_write = 0;
+
 
         if (!(target_struct)){
           f->eax = -1;
@@ -244,9 +288,20 @@ syscall_handler (struct intr_frame *f UNUSED)
           f->eax = 0;
           break;
         }
+
+        // if(strcmp(thread_current()->parent_thread->name, "main")){
+        //   f->eax = 0;
+        //   break;
+        // }
+        
+        sema_down(&target_struct->file_sema);  
         int size = file_write(target_struct->the_file, (void *)param2, (unsigned) param3);
         // printf("size : %d\n", size);
         f->eax = size;
+
+        sema_up(&target_struct->file_sema);
+
+        // thread_current()->code_write = 1;
 
       }
 
@@ -261,8 +316,11 @@ syscall_handler (struct intr_frame *f UNUSED)
         break;
         }
       file_seek(target_struct->the_file, param2);
+
+      if (param2 == 0){
+        file_allow_write(target_struct->the_file);
+      }
       
-      // target_file->the_file->offset = param2;
 
   		break;
     }
@@ -286,6 +344,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       if (target_file){
         list_remove(&target_file->fd_elem);
         file_close(target_file->the_file);
+        free(target_file);
       }
       
       break;
@@ -327,22 +386,66 @@ int allocate_fd(void){
   sema_up(&thread_current()->fd_list_lock);
   
   return fd;
-}if
+}
 
 
 
 void exit(int status){
-
-  
+  int i = 0;
+  struct fd_struct * temp_struct;
   thread_current()->parent_thread->child_return = status;
   thread_current()->parent_thread->exit_normal = 1;
+  
+  if (thread_current()->exec_inode->deny_write_cnt > 0)
+    thread_current()->exec_inode->deny_write_cnt--;
+  
   printf("%s: exit(%d)\n", thread_current()->name, status);
   sema_up(&thread_current()->child_sema);
+
+  struct list_elem * temp;
+  for(temp = list_begin(&thread_current()->child_list); temp != list_end(&thread_current()->child_list); temp = list_next(temp)){
+    struct thread * temp_thread = list_entry(temp, struct thread, child_elem);
+    thread_unblock(temp_thread);
+    // printf("kk\n");
+  }
+
+  for(temp = list_begin(&thread_current()->fd_list); temp != list_end(&thread_current()->fd_list); temp = list_next(temp)){
+    temp_struct = list_entry(temp, struct fd_struct, fd_elem);
+    
+    if(temp_struct->the_file){
+      file_close(temp_struct->the_file);
+      temp_struct->the_file = NULL;
+    }
+
+    if (i == 1){
+      struct fd_struct * prev_struct = list_entry(list_prev(temp), struct fd_struct, fd_elem);
+      free(prev_struct);
+    }
+    i = 1;
+    // printf("hh\n");
+  }
+  // free(temp_struct);
+
   thread_exit ();
 }
 
 bool check_invalid_pointer(void * addr){
-  if (addr > PHYS_BASE)
+
+  // printf("%x\n", addr);
+  
+  if (addr > PHYS_BASE-12)
     return 1;
+
+  void * ptr = pagedir_get_page(thread_current()->pagedir, addr);
+  if(!ptr)
+    return 1;
+
+  if (addr < 0x8048000)
+     return 1;
+
+  if (!(addr))
+     return 1;
+
+
   return 0;
 }

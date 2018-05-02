@@ -54,6 +54,7 @@ dir_open (struct inode *inode)
 struct dir *
 dir_open_root (void)
 {
+  // printf("here!\n");
   return dir_open (inode_open (ROOT_DIR_SECTOR));
 }
 

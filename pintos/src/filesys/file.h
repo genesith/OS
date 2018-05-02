@@ -6,7 +6,7 @@
 #include <debug.h>
 #include "filesys/inode.h"
 #include "threads/malloc.h"
-
+#include "threads/synch.h"
 #include "filesys/off_t.h"
 
 struct inode;

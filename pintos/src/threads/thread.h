@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "synch.h"
+#include "filesys/inode.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -98,6 +99,7 @@ struct thread
     struct list_elem elem;              /* List element. */
     // struct list_elem thread_elem;
     // struct list_elem parent;
+    struct semaphore exec_sema;
     struct semaphore child_sema;
     struct thread * parent_thread;
     int last_fd;
@@ -105,6 +107,11 @@ struct thread
     int child_return;
     struct semaphore fd_list_lock;
     int exit_normal;
+    int exec_normal;
+    struct list_elem child_elem;
+    struct list child_list;
+    struct inode * exec_inode;
+    struct list invalid_list;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

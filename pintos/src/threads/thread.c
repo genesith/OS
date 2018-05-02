@@ -188,6 +188,7 @@ thread_create (const char *name, int priority,
   t->parent_thread = thread_current();
   sema_init(&t->child_sema, 0);
   sema_init(&t->fd_list_lock, 1);
+  list_push_back(&thread_current()->child_list, &t->child_elem);
   // sema_down(&t->process_sema);
 
 
@@ -215,6 +216,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
+  // printf("thread %d was created\n", tid);
   // thread_yield();
 
   return tid;
@@ -246,6 +248,7 @@ thread_block (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   thread_current ()->status = THREAD_BLOCKED;
+  // printf("1");
   schedule ();
 }
 
@@ -491,11 +494,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->last_fd = 1;
+  t->exec_normal = 0;
   list_init(&t->fd_list);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
+  list_init(&t->child_list);
+  list_init(&t->invalid_list);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -519,10 +525,14 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
+  if (list_empty (&ready_list)){
+
     return idle_thread;
-  else
+  }
+  else{
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
+
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
