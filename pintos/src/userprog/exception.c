@@ -9,6 +9,8 @@
 #include "vm/invalidlist.h"
 #include "vm/frame.h"
 #include "vm/swap.h"
+#include <list.h>
+#include <stdint.h>
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -131,7 +133,10 @@ page_fault (struct intr_frame *f)
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
-  printf("%s\n", thread_current()->name);
+  // printf("%s\n", thread_current()->name);
+  int i = 0;
+  struct list_elem * target_elem;
+  struct list * references;
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
      data.  It is not necessarily the address of the instruction
@@ -153,19 +158,39 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  if (check_invalid_pointer(fault_addr))
+    exit(-1);
+
+
   uint8_t * new_addr = frame_allocate();
   
   // Swaped out page --> Swap in
+  // Do we have to Convert fault_address to index ????
+  fault_addr = (void *)((uintptr_t)fault_addr & (uintptr_t)0xfffff000);
+  
   int sector_num = invalid_list_check((uint8_t *) fault_addr);
   if (sector_num >= 0){
-    struct list * references = swap_in(new_addr, sector_num);
+    references = swap_in(new_addr, sector_num);
     invalid_list_remove(references);
 
-  }
-  
-  // Do we have to Convert fault_address to index ????
+    for (target_elem = list_begin(references); target_elem != list_end(references); target_elem = list_next(target_elem)){
+      struct reference_struct * target_struct = list_entry(target_elem, struct reference_struct, reference_elem);
+      
+      if (i == 0){
+        install_page(target_struct->vpage, (void *) new_addr, true, true);
+        i++;
+      }
+      else{
+        install_page(target_struct->vpage, (void *) new_addr, true, false);
+      }
+    }
 
-  install_page(fault_addr, (void *) new_addr, );
+  }
+
+  else
+    install_page(fault_addr, (void *) new_addr, true, true);
+
+}
 
 
 
@@ -185,12 +210,12 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
-  exit(-1);
+  // exit(-1);
   // printf ("Page fault at %p: %s error %s page in %s context.\n",
   //         fault_addr,
   //         not_present ? "not present" : "rights violation",
   //         write ? "writing" : "reading",
   //         user ? "user" : "kernel");
   // kill (f);
-}
+// }
 

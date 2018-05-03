@@ -393,7 +393,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable, bool fifo);
+bool install_page (void *upage, void *kpage, bool writable, bool fifo);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -485,7 +485,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
+      if (!install_page (upage, kpage, writable, true)) 
         {
           palloc_free_page (kpage);
           return false; 
@@ -541,7 +541,7 @@ setup_stack (void **esp, char * file_name)
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true, true);
       if (success)
         *esp = PHYS_BASE;
       else
@@ -589,7 +589,7 @@ setup_stack (void **esp, char * file_name)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
+bool
 install_page (void *upage, void *kpage, bool writable, bool fifo)
 {
   struct thread *t = thread_current ();
@@ -601,17 +601,24 @@ install_page (void *upage, void *kpage, bool writable, bool fifo)
   if(result){
 
     struct frame_struct * target_frame = (struct frame_struct * ) malloc(sizeof(struct frame_struct));
+    list_init(&target_frame->references);
     // target_frame = (struct frame_struct *) (frame_table + index * sizeof(struct frame_struct));
 
     // target_frame->free = false;
-    target_frame->kernel_address = (uint32_t *) ((uint32_t)kpage & BITMASK(12, 20));
+    target_frame->kpage = (uint8_t *) ((uint32_t)kpage & BITMASK(12, 20));
     struct reference_struct * reference = (struct reference_struct * )malloc(sizeof(struct reference_struct));
     reference->tid = t->tid;
-    reference->virtual_address = (uint32_t *) ((uint32_t)upage & BITMASK(12, 20));
-
+    reference->vpage = (uint8_t *) ((uint32_t)upage & BITMASK(12, 20));
+    // printf("1\n");
     list_push_back(&target_frame->references, &reference->reference_elem);
-    list_push_back(&FIFO_list, &target_frame->FIFO_elem);
+
+    if(fifo){
+      // printf("2\n");
+      list_push_back(&FIFO_list, &target_frame->FIFO_elem);
+    }
   }
+
+  // printf("3\n");
 
 
   return result;

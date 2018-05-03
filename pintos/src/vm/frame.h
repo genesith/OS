@@ -3,7 +3,7 @@
 #include <stdint.h>
 
 struct frame_struct{
-	uint32_t * kernel_address;
+	uint8_t * kpage;
 	struct list references;
 	struct list_elem FIFO_elem;
 };
@@ -11,14 +11,14 @@ struct frame_struct{
 struct reference_struct{
 
 	int tid;
-	uint32_t * virtual_address;
+	uint8_t * vpage;
 	struct list_elem reference_elem;
 
 };
 
 
-uint32_t * frame_table;
-uint32_t * userpool;
+uint8_t * frame_table;
+uint8_t * userpool;
 
 struct list FIFO_list;
 

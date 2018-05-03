@@ -16,13 +16,17 @@ uint8_t * frame_allocate(void){
       int sector_num = get_free_swap();
       evict_frame = get_evict_frame();
 
-      swap_out(sector_num, &evict_frame->references);
+      swap_out(sector_num, &evict_frame->references, kpage);
 
       //Update Invalid page table;
-
       invalid_list_insert(&evict_frame->references, sector_num);
 
-      kpage = (uint8_t *) evict_frame->kernel_address;
+      /*
+      //Update Present bit to 0 for every references of evict frame
+      */
+
+      
+      kpage = (uint8_t *) evict_frame->kpage;
     
     }
 
