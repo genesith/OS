@@ -9,6 +9,7 @@
 #include "vm/invalidlist.h"
 #include "vm/frame.h"
 #include "vm/swap.h"
+#include "threads/vaddr.h"
 #include <list.h>
 #include <stdint.h>
 
@@ -88,6 +89,7 @@ kill (struct intr_frame *f)
      
   /* The interrupt frame's code segment value tells us where the
      exception originated. */
+  
   switch (f->cs)
     {
     case SEL_UCSEG:
@@ -144,6 +146,7 @@ page_fault (struct intr_frame *f)
      See [IA32-v2a] "MOV--Move to/from Control Registers" and
      [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
      (#PF)". */
+
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
   /* Turn interrupts back on (they were only off so that we could
@@ -158,41 +161,66 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  if (check_invalid_pointer(fault_addr))
-    exit(-1);
+  bool result = false;
+  printf("%d %x %d %x %s\n", not_present, fault_addr, is_user_vaddr(fault_addr), f->esp, thread_current()->name);
+  if (not_present && fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr) && (f->esp < 0xc0000000) ) {
+      // printf("Page Fault!!! with %x, %x\n", fault_addr, f->esp-0x1000);
+
+    if ((fault_addr <= f->esp - 0x1000) && (fault_addr >= USER_VADDR_BOTTOM + 0x1000)){
+      printf("Address is wrong, %x %x\n", fault_addr, f->esp);
+      exit(-1);
+    }
+  // printf("%d %d %d\n", not_present, write, user);
 
 
   uint8_t * new_addr = frame_allocate();
-  
+
   // Swaped out page --> Swap in
   // Do we have to Convert fault_address to index ????
-  fault_addr = (void *)((uintptr_t)fault_addr & (uintptr_t)0xfffff000);
-  
-  int sector_num = invalid_list_check((uint8_t *) fault_addr);
-  if (sector_num >= 0){
-    references = swap_in(new_addr, sector_num);
-    invalid_list_remove(references);
 
-    for (target_elem = list_begin(references); target_elem != list_end(references); target_elem = list_next(target_elem)){
-      struct reference_struct * target_struct = list_entry(target_elem, struct reference_struct, reference_elem);
+
+  fault_addr = (void *)((uintptr_t)fault_addr & (uintptr_t)0xfffff000);
+  int sector_num = invalid_list_check((uint8_t *) fault_addr);
+  printf("sector_num : %d\n", sector_num);
+  
+  
+
+    if (sector_num >= 0){
       
-      if (i == 0){
-        install_page(target_struct->vpage, (void *) new_addr, true, true);
-        i++;
+      references = swap_in(new_addr, sector_num);
+      invalid_list_remove(references);
+
+      for (target_elem = list_begin(references); target_elem != list_end(references); target_elem = list_next(target_elem)){
+        struct reference_struct * target_struct = list_entry(target_elem, struct reference_struct, reference_elem);
+        
+        if (i == 0){
+          install_page(target_struct->vpage, (void *) new_addr, true, true);
+          i++;
+        }
+        else{
+          install_page(target_struct->vpage, (void *) new_addr, true, false);
+        }
       }
-      else{
-        install_page(target_struct->vpage, (void *) new_addr, true, false);
-      }
+
     }
 
+    else{
+      
+      result = install_page(fault_addr, (void *) new_addr, true, true);
+      // printf("here?? Stack growth result was %d\n", result);  
+    }
   }
 
-  else
-    install_page(fault_addr, (void *) new_addr, true, true);
+  else{
+    printf("why is it??\n");
+    exit(-1);
+  
+  }
+  // if (!(result)){
+  //   exit(-1);
+  // }
 
 }
-
-
 
 
 
@@ -203,7 +231,7 @@ page_fault (struct intr_frame *f)
 
   2. Page Install - Insert to page table, FIFO List 
 
-  */
+  
 
 
   /* To implement virtual memory, delete the rest of the function

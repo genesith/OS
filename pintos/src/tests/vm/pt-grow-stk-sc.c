@@ -13,9 +13,12 @@
 void
 test_main (void)
 {
+  // printf("Start!!\n");
   int handle;
   int slen = strlen (sample);
+  // printf("compute len\n");
   char buf2[65536];
+  // printf("declare buffer\n");
 
   /* Write file via write(). */
   CHECK (create ("sample.txt", slen), "create \"sample.txt\"");

@@ -49,6 +49,7 @@ process_execute (const char *file_name)
   temp = strtok_r(file_name, " ", &next);
   // printf("temp : %s\n", temp);
   /* Create a new thread to execute FILE_NAME. */
+  printf("why twice??\n");
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   // free(temp);
   if (tid == TID_ERROR){
@@ -76,7 +77,7 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  // printf("HERERERE!!!\n");
+  printf("HERERERE!!!\n");
   success = load (file_name, &if_.eip, &if_.esp);
   if (strcmp(thread_current()->parent_thread->name, "main")){
     sema_up(&(thread_current()->parent_thread)->exec_sema);
@@ -85,11 +86,16 @@ start_process (void *file_name_)
   }
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  // printf("hehehe7\n");
-  if (!success) 
-    thread_exit ();
+  printf("here1!!!\n");
 
+  palloc_free_page (file_name);
+  printf("here2!!!\n");
+
+  // printf("hehehe7\n");
+  if (!success){
+    printf("????\n"); 
+    thread_exit ();
+}
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -98,7 +104,7 @@ start_process (void *file_name_)
      and jump to it. */
   // hex_dump(if_.esp, if_.esp, 500, true);
   // hex_dump(if_.eip, if_.eip, 500, true);
-
+  printf("here!!!\n");
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   // hex_dump(if_.esp, if_.esp, 500, true);
 
@@ -244,7 +250,7 @@ bool
 load (const char *file_name, void (**eip) (void), void **esp) 
 {
 
-  // printf("LOADING!!!!!!\n");
+  printf("LOADING!!!!!!\n");
 
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -350,9 +356,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
+              printf("%s %d %d\n", file_name, read_bytes, zero_bytes);
+
               if (!load_segment (file, file_page, (void *) mem_page,
-                                 read_bytes, zero_bytes, writable))
+                                 read_bytes, zero_bytes, writable)){
+                printf("load_segment\n");
                 goto done;
+              }
             }
           else
             goto done;
@@ -361,14 +371,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
   // printf("hehehe2\n");
   /* Set up stack. */
-  if (!setup_stack (esp, dup_filename))
-    
+  printf("before setup stack\n");
+  if (!setup_stack (esp, dup_filename)){
+    printf("setup stack\n");
     goto done;
-
+}
   // printf("hehehe3\n");
 
 
   /* Start address. */
+  printf("All done\n");
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
@@ -385,6 +397,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
   // printf("%d\n", t->exec_inode->deny_write_cnt);
   file_close (file);
+  printf("done\n");
   // printf("%d\n", t->exec_inode->deny_write_cnt);
   // printf("hehehe5\n");
   // t->code_write = 1;
@@ -472,14 +485,17 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
+      // uint8_t *kpage = palloc_get_page (PAL_USER);
+      uint8_t *kpage = frame_allocate();
+      if (kpage == NULL){
+        printf("1\n");
         return false;
-
+      }
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           palloc_free_page (kpage);
+          printf("2\n");
           return false; 
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -488,6 +504,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (!install_page (upage, kpage, writable, true)) 
         {
           palloc_free_page (kpage);
+          printf("3\n");
           return false; 
         }
 
@@ -500,6 +517,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
     }
+  printf("load segment done\n");
   return true;
 }
 
@@ -538,7 +556,8 @@ setup_stack (void **esp, char * file_name)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  // kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  kpage = frame_allocate ();
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true, true);

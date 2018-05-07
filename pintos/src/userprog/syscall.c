@@ -7,6 +7,7 @@
 #include "threads/vaddr.h"
 #include <user/syscall.h>
 #include "userprog/process.h"
+#include "userprog/exception.h"
 #include "devices/shutdown.h"
 #include "threads/malloc.h"
 #include <list.h>
@@ -21,6 +22,7 @@ int allocate_fd(void);
 
 void exit(int status);
 bool check_invalid_pointer(void * addr);
+bool check_invalid_pointer2(void * addr, void * f_esp);
 
 void
 syscall_init (void) 
@@ -31,7 +33,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  // printf("HERE!!!\n");
+  printf("HERE!!!\n");
   if (check_invalid_pointer(f->esp)){
     f->eax = -1;
     exit(-1);
@@ -39,7 +41,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   int syscall_num = *(int *)(f->esp);
-
+  printf("syscall_num : %d\n", syscall_num);
 
   int param1 = *((int *)(f->esp)+ 1);
   int param2 = *((int *)(f->esp)+ 2);
@@ -239,7 +241,11 @@ syscall_handler (struct intr_frame *f UNUSED)
           break;
         }
 
-        if (check_invalid_pointer((void *) param2)){
+
+
+        if (check_invalid_pointer2((void *) param2, (void *)f->esp)){
+          // printf("GG\n");
+          // printf("Check address %x\n", param2);
           f->eax = -1;
           exit(-1);
           break;
@@ -432,14 +438,52 @@ void exit(int status){
 bool check_invalid_pointer(void * addr){
 
   // printf("%x\n", addr);
+  // fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)
   
+  // if (addr < USER_VADDR_BOTTOM)
+  //   return 1;
+  // if (!(is_user_vaddr(addr)))
+  //   return 1;
+
   if (addr > PHYS_BASE-12)
     return 1;
 
   void * ptr = pagedir_get_page(thread_current()->pagedir, addr);
-  if(!ptr)
+  if(!ptr){
+    // printf("here!!\n")
+    return 1;
+  }
+  if (addr < 0x8048000)
+     return 1;
+
+  if (!(addr))
+     return 1;
+
+
+  return 0;
+}
+
+bool check_invalid_pointer2(void * addr, void * f_esp){
+
+  // printf("%x\n", addr);
+  // fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)
+  
+  // if (addr < USER_VADDR_BOTTOM)
+  //   return 1;
+  // if (!(is_user_vaddr(addr)))
+  //   return 1;
+
+  if (addr > PHYS_BASE-12)
     return 1;
 
+  if (addr >= f_esp)
+    return 0;
+
+  void * ptr = pagedir_get_page(thread_current()->pagedir, addr);
+  if(!ptr){
+    // printf("here!!\n")
+    return 1;
+  }
   if (addr < 0x8048000)
      return 1;
 

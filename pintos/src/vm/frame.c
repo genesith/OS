@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include "threads/thread.h"
 #include "vm/frame.h"
 #include "threads/vaddr.h"
 #include "vm/invalidlist.h"
@@ -8,31 +9,38 @@
 
 uint8_t * frame_allocate(void){
 
-    uint8_t * kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+  uint8_t * kpage = palloc_get_page(PAL_USER | PAL_ZERO);
     
     // When pysical memory is full
-    if (!(kpage)){
-      struct frame_struct * evict_frame;
-      int sector_num = get_free_swap();
-      evict_frame = get_evict_frame();
+  if (!(kpage)){
+    // printf("kpage is NULL\n");
+    struct frame_struct * evict_frame;
+    struct list_elem * target_elem;
+    int sector_num = get_free_swap();
+    evict_frame = get_evict_frame();
 
-      swap_out(sector_num, &evict_frame->references, kpage);
+    swap_out(sector_num, &evict_frame->references, evict_frame->kpage);
 
       //Update Invalid page table;
-      invalid_list_insert(&evict_frame->references, sector_num);
+    invalid_list_insert(&evict_frame->references, sector_num);
 
       /*
       //Update Present bit to 0 for every references of evict frame
       */
 
-      
-      kpage = (uint8_t *) evict_frame->kpage;
-    
+    for (target_elem = list_begin(&evict_frame->references); target_elem != list_end(&evict_frame->references); target_elem = list_next(target_elem)){
+      struct reference_struct * target_struct = list_entry(target_elem, struct reference_struct, reference_elem);
+      struct thread * target_thread = search_by_tid(target_struct->tid);
+      pagedir_clear_page(target_thread->pagedir, target_struct->vpage);
     }
+  
+    kpage = (uint8_t *) evict_frame->kpage;
+    
+  }
 
     // When there is available pysical memory
     
-    return kpage;
+  return kpage;
     
 
 }
