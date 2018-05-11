@@ -33,7 +33,7 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  printf("HERE!!!\n");
+  // printf("HERE!!!\n");
   if (check_invalid_pointer(f->esp)){
     f->eax = -1;
     exit(-1);
@@ -41,7 +41,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   }
 
   int syscall_num = *(int *)(f->esp);
-  printf("syscall_num : %d\n", syscall_num);
+  // printf("syscall_num : %d\n", syscall_num);
 
   int param1 = *((int *)(f->esp)+ 1);
   int param2 = *((int *)(f->esp)+ 2);
@@ -177,8 +177,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_OPEN:
   	{
       
-      if (check_invalid_pointer((void *) param1)){
+      if (check_invalid_pointer2((void *) param1, f->esp)){
         f->eax = -1;
+        // printf("open failed due to invalid pointer : %x\n", param1);
         exit(-1);
         break;
       }
@@ -225,7 +226,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	
     case SYS_READ:
   	{
-
+      // printf("sysread");
       if (param1 == 0){
         input_getc();
         // f->eax = 0;
@@ -473,7 +474,7 @@ bool check_invalid_pointer2(void * addr, void * f_esp){
   // if (!(is_user_vaddr(addr)))
   //   return 1;
 
-  if (addr > PHYS_BASE-12)
+  if (addr > PHYS_BASE)
     return 1;
 
   if (addr >= f_esp)

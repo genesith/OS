@@ -1,13 +1,19 @@
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
+#include "threads/vaddr.h"
 #include "devices/block.h"
+
+#define SECTORS_PER_PAGE PGSIZE/BLOCK_SECTOR_SIZE
 
 struct swap_struct {
    bool empty;
    struct list * references;
 };
 
-block_sector_t total_sector_number;
+block_sector_t total_sector_blocks;
+
+struct lock swap_lock;
 
 uint8_t * global_swap_table;
 
