@@ -73,7 +73,9 @@ sort_chunks (const char *subprocess, int exit_status)
       /* Read chunk back from file. */
       quiet = true;
       snprintf (fn, sizeof fn, "buf%zu", i);
+      // printf("before open");
       CHECK ((handle = open (fn)) > 1, "open \"%s\"", fn);
+      // printf("handle : %d end open", handle);
       read (handle, buf1 + CHUNK_SIZE * i, CHUNK_SIZE);
       close (handle);
       quiet = false;

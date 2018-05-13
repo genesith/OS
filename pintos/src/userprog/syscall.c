@@ -23,6 +23,8 @@ int allocate_fd(void);
 void exit(int status);
 bool check_invalid_pointer(void * addr);
 bool check_invalid_pointer2(void * addr, void * f_esp);
+bool is_code_segment(void * addr);
+bool is_there_or_should_be(void * addr);
 
 void
 syscall_init (void) 
@@ -34,18 +36,35 @@ static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
   // printf("HERE!!!\n");
-  if (check_invalid_pointer(f->esp)){
+
+  // printf("esp : %x\n", f->esp);
+
+  if (!(is_there_or_should_be((void *) f->esp))){
     f->eax = -1;
     exit(-1);
+  }
+  // if (check_invalid_pointer(f->esp)){
+  //   f->eax = -1;
+  //   exit(-1);
 
+  // }
+
+  if (f->esp >= PHYS_BASE - 12){
+    f->eax = -1;
+    exit(-1);
   }
 
+
+
   int syscall_num = *(int *)(f->esp);
+
   // printf("syscall_num : %d\n", syscall_num);
 
   int param1 = *((int *)(f->esp)+ 1);
   int param2 = *((int *)(f->esp)+ 2);
   int param3 = *((int *)(f->esp)+ 3);
+
+
   
 
 
@@ -53,6 +72,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_HALT:
 
   	{
+      // printf("halt\n");
   		shutdown_power_off();
 
   		break;
@@ -78,7 +98,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       // printf("param1 : %s\n", (ch`[ar *)param1);
       // printf("will now print param1 : %s, and esp\n", param1);
 
-      if (check_invalid_pointer((void *) param1)){
+      if ((check_invalid_pointer((void *) param1)) || (!(is_there_or_should_be((void *) param1)))){
         f->eax = -1;
         exit(-1);
         break;
@@ -148,11 +168,12 @@ syscall_handler (struct intr_frame *f UNUSED)
   	
   	case SYS_CREATE:
     {
-      if (check_invalid_pointer((void *) param1)){
+      if ((check_invalid_pointer((void *) param1))|| (!(is_there_or_should_be((void *) param1)))){
         f->eax = -1;
         exit(-1);
         break;
       }
+
 
       bool result = filesys_create((char *)param1, (off_t) param2);
       f->eax = result;
@@ -177,7 +198,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_OPEN:
   	{
       
-      if (check_invalid_pointer2((void *) param1, f->esp)){
+      if ((check_invalid_pointer((void *) param1)) || (!(is_there_or_should_be((void *) param1)))){
         f->eax = -1;
         // printf("open failed due to invalid pointer : %x\n", param1);
         exit(-1);
@@ -243,10 +264,14 @@ syscall_handler (struct intr_frame *f UNUSED)
         }
 
 
+        // printf("Check address %x %x %x\n", param2, f->esp, f->esp - param2);
+        void * new_esp = (void *)((uintptr_t)f->esp & (uintptr_t)0xfffff000);
+ 
 
-        if (check_invalid_pointer2((void *) param2, (void *)f->esp)){
+        // if ((check_invalid_pointer((void *) param2)) || (!(is_there_or_should_be((void *) param2)))){
+
+        if (check_invalid_pointer((void *) param2)) {  
           // printf("GG\n");
-          // printf("Check address %x\n", param2);
           f->eax = -1;
           exit(-1);
           break;
@@ -265,7 +290,15 @@ syscall_handler (struct intr_frame *f UNUSED)
   	case SYS_WRITE:
   	{
       // printf("SysWrite has been called\n");
-      if (check_invalid_pointer((void *) param2)){
+      // printf("Check address %x %x\n", param2, f->esp);
+
+      // if (is_code_segment((void * ) param2)){
+      //   f->eax = -1;
+      //   exit(-1);
+      //   break;
+      // }
+
+      if ((check_invalid_pointer((void *) param2)) || (!(is_there_or_should_be((void *) param2)))){
         f->eax = -1;
         exit(-1);
         break;
@@ -438,7 +471,17 @@ void exit(int status){
 
 bool check_invalid_pointer(void * addr){
 
-  // printf("%x\n", addr);
+  if (!(addr))
+    return 1;
+
+  if (addr > PHYS_BASE)
+    return 1;
+
+  if (addr < USER_VADDR_BOTTOM)
+    return 1;
+
+
+  // printf("check 1. %x\n", addr);
   // fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)
   
   // if (addr < USER_VADDR_BOTTOM)
@@ -446,19 +489,19 @@ bool check_invalid_pointer(void * addr){
   // if (!(is_user_vaddr(addr)))
   //   return 1;
 
-  if (addr > PHYS_BASE-12)
-    return 1;
+  // if (addr > PHYS_BASE-12)
+  //   return 1;
 
-  void * ptr = pagedir_get_page(thread_current()->pagedir, addr);
-  if(!ptr){
-    // printf("here!!\n")
-    return 1;
-  }
-  if (addr < 0x8048000)
-     return 1;
+  // void * ptr = pagedir_get_page(thread_current()->pagedir, addr);
+  // if(!ptr){
+  //   printf("here!!\n");
+  //   return 1;
+  // }
+  // if (addr < 0x8048000)
+  //    return 1;
 
-  if (!(addr))
-     return 1;
+  // if (!(addr))
+  //    return 1;
 
 
   return 0;
@@ -466,7 +509,7 @@ bool check_invalid_pointer(void * addr){
 
 bool check_invalid_pointer2(void * addr, void * f_esp){
 
-  // printf("%x\n", addr);
+  // printf("check 2, %x %x\n", addr, f_esp);
   // fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)
   
   // if (addr < USER_VADDR_BOTTOM)
@@ -474,23 +517,42 @@ bool check_invalid_pointer2(void * addr, void * f_esp){
   // if (!(is_user_vaddr(addr)))
   //   return 1;
 
-  if (addr > PHYS_BASE)
-    return 1;
+  // if (addr > PHYS_BASE)
+  //   return 1;
 
-  if (addr >= f_esp)
-    return 0;
+  // if (addr >= f_esp)
+  //   return 0;
 
-  void * ptr = pagedir_get_page(thread_current()->pagedir, addr);
-  if(!ptr){
-    // printf("here!!\n")
-    return 1;
-  }
-  if (addr < 0x8048000)
-     return 1;
+  // if ((addr <= f_esp-0x1000) && (addr >= USER_VADDR_BOTTOM + 0x10000000))
+  //   return 1;
 
-  if (!(addr))
-     return 1;
+  // void * ptr = pagedir_get_page(thread_current()->pagedir, addr);
+  // if(!ptr){
+  //   // printf("here!!\n");
+  //   return 1;
+  // }
+  // if (addr < 0x8048000)
+  //    return 1;
+
+  // if (!(addr))
+  //    return 1;
 
 
   return 0;
+}
+
+bool is_code_segment(void * addr){
+  if ((USER_VADDR_BOTTOM <= addr) && (addr <= USER_VADDR_BOTTOM + 0x1000))
+    return 1;
+}
+
+bool is_there_or_should_be(void * addr){
+    void * page_ptr = pagedir_get_page(thread_current()->pagedir, addr);
+
+    void * new_addr = (void *)((uintptr_t)addr & (uintptr_t)0xfffff000);
+
+    void * invalid_ptr = invalid_list_check(new_addr, 0);
+
+    return (page_ptr || invalid_ptr);
+
 }

@@ -475,6 +475,7 @@ static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
+  // printf("load_segment\n");
 
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
@@ -491,24 +492,37 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
-      printf("load %x\n", upage);
+
+
+
+
+
+      // printf("load %x\n", upage);
       struct invalid_struct * target_struct = (struct invalid_struct *)malloc(sizeof(struct invalid_struct));
       target_struct->vpage = upage;
       target_struct->sector = NULL;
       target_struct->lazy = 1;
       target_struct->lazy_inode = file->inode;
-      target_struct->lazy_offset = ofs + i * PGSIZE;
+      target_struct->lazy_offset = ofs;
+      target_struct->lazy_writable = writable;
+      // printf("process offset : %d %d\n", ofs, page_read_bytes);
+
       target_struct->lazy_write_byte = page_read_bytes;
 
       list_push_back(&thread_current()->invalid_list, &target_struct->invalid_elem);
+
+
+
+
+
       /* Get a page of memory. */
       // uint8_t *kpage = palloc_get_page (PAL_USER);
       // uint8_t *kpage = frame_allocate();
       // if (kpage == NULL){
-        // printf("1\n");
-        // return false;
+      //   printf("1\n");
+      //   return false;
       // }
-      /* Load this page. */
+      // /* Load this page. */
       // if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
       //   {
       //     palloc_free_page (kpage);
@@ -517,13 +531,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       //   }
       // memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Add the page to the process's address space. */
+      // /* Add the page to the process's address space. */
       // if (!install_page (thread_current()->tid, upage, kpage, writable, true)) 
       //   {
       //     palloc_free_page (kpage);
       //     // printf("3\n");
       //     return false; 
       //   }
+
+      // hex_dump(kpage, kpage, PGSIZE, true);
 
       // frame_insert(kpage, upage);
 
@@ -533,7 +549,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
       upage += PGSIZE;
-      i++;
+      ofs += page_read_bytes;
     }
   // printf("load segment done\n");
   return true;

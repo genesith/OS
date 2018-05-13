@@ -41,7 +41,7 @@ void invalid_list_remove(struct list * target_list){
 	return;
 }
 
-struct invalid_struct * invalid_list_check(uint8_t * kpage){
+struct invalid_struct * invalid_list_check(uint8_t * kpage, bool delete){
 	struct list_elem * target_elem;
 	struct list * target_list = &thread_current()->invalid_list; 
 
@@ -49,7 +49,7 @@ struct invalid_struct * invalid_list_check(uint8_t * kpage){
 
 		struct invalid_struct * target_struct = list_entry(target_elem, struct invalid_struct, invalid_elem);
 		if(target_struct->vpage == kpage){
-			if (target_struct->lazy == 1){
+			if ((target_struct->lazy == 1) && (delete)){
 				// printf("why?");
 				list_remove(target_elem);
 			}
@@ -62,13 +62,16 @@ struct invalid_struct * invalid_list_check(uint8_t * kpage){
 }
 
 void delete_from_swap(){
-        struct list_elem * target_elem;
-        struct list * target_list = &thread_current()->invalid_list;
+	struct list_elem * target_elem;
+    struct list * target_list = &thread_current()->invalid_list;
         
-        for (target_elem = list_begin(target_list) ; target_elem != list_end(target_list) ; target_elem = list_next(target_elem)){
-                struct invalid_struct * target_struct = list_entry(target_elem, struct invalid_struct, invalid_elem);
-                
-                if ( remove_references(thread_current() -> tid, target_struct -> sector) < 1)
-                       PANIC("Nothing was removed from delet_from_swap?\n");
+    for (target_elem = list_begin(target_list) ; target_elem != list_end(target_list) ; target_elem = list_next(target_elem)){
+        struct invalid_struct * target_struct = list_entry(target_elem, struct invalid_struct, invalid_elem);
+        if (!(target_struct->lazy)){
+              
+        	if ( remove_references(thread_current() -> tid, target_struct -> sector) < 1)
+            	PANIC("Nothing was removed from delet_from_swap?\n");
+
         }
+    }
 }

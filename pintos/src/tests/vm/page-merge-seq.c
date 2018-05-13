@@ -1,3 +1,7 @@
+
+
+
+
 /* Generates about 1 MB of random data that is then divided into
    16 chunks.  A separate subprocess sorts each chunk in
    sequence.  Then we merge the chunks and verify that the result
@@ -38,6 +42,7 @@ init (void)
 static void
 sort_chunks (void)
 {
+  // printf("sort_chunks????\n");
   size_t i;
 
   create ("buffer", CHUNK_SIZE);

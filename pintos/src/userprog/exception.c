@@ -163,49 +163,49 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 
   bool result = false;
-  printf("fault address : %x %s\n", fault_addr, thread_current()->name);
+  // printf("fault address : %x %x\n", fault_addr, f->esp);
 
   if (not_present && fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)) {
+    if (((fault_addr <= f->esp - 0x1000) && (f->esp <= 0xC0000000)) && (fault_addr >= USER_VADDR_BOTTOM + 0x1000000)){
+    // if ((fault_addr <= f->esp - 0x1000) && (fault_addr >= USER_VADDR_BOTTOM + 0x1000000)){
+      // printf("Address is wrong, %x %x\n", fault_addr, f->esp);
+      exit(-1);
+    }
     // printf("Page Fault!!! with %x, %x\n", fault_addr, f->esp-0x1000);
 
     fault_addr = (void *)((uintptr_t)fault_addr & (uintptr_t)0xfffff000);
 
-    struct invalid_struct * target_invalid_struct = invalid_list_check((uint8_t *) fault_addr);
+    struct invalid_struct * target_invalid_struct = invalid_list_check((uint8_t *) fault_addr, 1);
     // printf("%d %x %x\n", target_invalid_struct->lazy, target_invalid_struct->vpage, fault_addr);
     uint8_t * new_addr = frame_allocate();
 
     if (target_invalid_struct){
 
 
-    // if (((fault_addr <= f->esp - 0x1000) && f->esp <= 0xC0000000) && (fault_addr >= USER_VADDR_BOTTOM + 0x1000000)){
-    // // if (fault_addr <= f->esp - 0x1000){
-    //   printf("Address is wrong, %x %x\n", fault_addr, f->esp);
-    //   exit(-1);
-    // }
-    // printf("h1\n");
-
-
-    
-    // printf("here");
-
-    // hex_dump(f->eip, f->eip, 30, true);
-  
-    // printf("h2");
-    // printf("sector_num : %d\n", sector_num);
         if (target_invalid_struct->lazy == 1){
 
           // printf("lazy");
           struct file * target_file = file_open(target_invalid_struct->lazy_inode);
 
+          if (!(target_file)){
+            printf("File doesn't open");
+          }
+
+
+
           file_seek(target_file, target_invalid_struct->lazy_offset);
+          // file_seek(target_file, 0);
+          // printf("lazy offset : %d %d\n", target_invalid_struct->lazy_offset, target_invalid_struct->lazy_write_byte);
           
           file_read(target_file, new_addr, target_invalid_struct->lazy_write_byte);
 
           memset(new_addr + target_invalid_struct->lazy_write_byte, 0, PGSIZE - target_invalid_struct->lazy_write_byte);
 
+          // hex_dump(new_addr, new_addr, 30, true);
+
           install_page(thread_current()->tid, target_invalid_struct->vpage, (void *) new_addr, true, true);
 
-          file_close(target_file);
+          // file_close(target_file);
 
         }
 
@@ -249,7 +249,7 @@ page_fault (struct intr_frame *f)
     
   else{
 
-      // printf("why is it??\n");
+    // printf("why is it??\n");
     exit(-1);
     
   }
