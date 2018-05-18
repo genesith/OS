@@ -235,6 +235,8 @@ struct thread * search_by_tid(int tid){
   return NULL;
 
 }
+
+
 /* Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
@@ -499,6 +501,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->last_mmapid = 1;
   list_push_back (&all_list, &t->allelem);
   list_init(&t->child_list);
   list_init(&t->invalid_list);

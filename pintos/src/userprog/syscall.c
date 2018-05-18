@@ -10,6 +10,9 @@
 #include "userprog/exception.h"
 #include "devices/shutdown.h"
 #include "threads/malloc.h"
+#include "filesys/file.h"
+#include "userprog/pagedir.h"
+// #include "vm/invalidlist.h"
 #include <list.h>
 
 // #define PHYS_BASE 0xC0000000;
@@ -69,6 +72,7 @@ syscall_handler (struct intr_frame *f UNUSED)
 
 
   switch(syscall_num){
+    
   	case SYS_HALT:
 
   	{
@@ -298,11 +302,42 @@ syscall_handler (struct intr_frame *f UNUSED)
       //   break;
       // }
 
+      // printf("write code : %x %x\n", param2, thread_current()->last_load);
+
+
       if ((check_invalid_pointer((void *) param2)) || (!(is_there_or_should_be((void *) param2)))){
         f->eax = -1;
         exit(-1);
         break;
       }
+
+
+      uint8_t * new_addr = (uint32_t)((uintptr_t)param2 & (uintptr_t)0xfffff000);
+
+      struct invalid_struct * target_struct = invalid_list_check(new_addr, 0);
+
+      if ((param2 < thread_current()->last_load)){
+        if (is_there_or_should_be((void *)new_addr)){
+          if (target_struct){
+            if(target_struct->lazy == 1){
+              printf("case1\n");
+            }
+            else{
+              printf("case2\n");
+            }
+          }
+          else{
+            printf("case 3 %d\n", pagedir_is_writable(thread_current()->pagedir, param2));
+          }
+        }
+        else{
+          printf("case4\n");
+        }
+      }
+      else{
+        printf("case5\n");
+      } 
+
 
       if (param1 == 1){
         putbuf((char *)param2, param3);
@@ -390,6 +425,58 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
 
+
+    case SYS_MMAP:
+    {
+    //param 1 is fd,  param 2 is (void *) address
+      int data_length = PGSIZE, offset = 0;
+      int new_mmapid = thread_current()->last_mmapid++;
+      struct fd_struct * mmap_file = find_by_fd(param1);
+      uint32_t mmap_length = file_length(mmap_file->the_file);
+
+      // printf("file length is %d\n", mmap_length);
+
+      struct file * refresh_file = file_reopen(mmap_file->the_file);
+      
+      while (mmap_length > 0){
+        if(mmap_length < PGSIZE){
+          data_length = mmap_length;
+        }
+
+        struct invalid_struct * target_struct = (struct invalid_struct *)malloc(sizeof(struct invalid_struct));
+        
+        target_struct->vpage = (void *) param2 + offset;
+        target_struct->sector = NULL;
+        target_struct->lazy = 1;
+        target_struct->lazy_inode = refresh_file->inode;
+        target_struct->lazy_offset = offset;
+        target_struct->lazy_writable = 1;
+        target_struct->lazy_write_byte = data_length;
+        target_struct->is_mmap = 1;
+        target_struct->mmapid = new_mmapid;
+        // printf("param2 : %x %x\n", param2, target_struct->vpage);
+        // printf("target_mmapid : %d\n", target_struct->mmapid);
+        // printf("process offset : %d %d\n", ofs, page_read_bytes);
+
+        list_push_back(&thread_current()->invalid_list, &target_struct->invalid_elem);  
+
+        mmap_length -= data_length;
+        offset += data_length;
+      }
+
+      f->eax = new_mmapid;
+      // printf("return : %d\n", new_mmapid);
+      break;
+      
+    }
+
+    case SYS_MUNMAP:
+    
+    {
+      do_munmap(param1, thread_current()->tid);
+      break;
+    }
+
     default:
     {
       f->eax = -1;
@@ -431,7 +518,7 @@ int allocate_fd(void){
 
 
 void exit(int status){
-  int i = 0;
+  int i = 0, j = 0;
   struct fd_struct * temp_struct;
   thread_current()->parent_thread->child_return = status;
   thread_current()->parent_thread->exit_normal = 1;
@@ -462,6 +549,10 @@ void exit(int status){
       free(prev_struct);
     }
     i = 1;
+
+    for (j = 1; j <= thread_current()->last_mmapid; j++){
+      do_munmap(j, thread_current()->tid);
+    }
     // printf("hh\n");
   }
   // free(temp_struct);
@@ -554,5 +645,4 @@ bool is_there_or_should_be(void * addr){
     void * invalid_ptr = invalid_list_check(new_addr, 0);
 
     return (page_ptr || invalid_ptr);
-
-}
+  }

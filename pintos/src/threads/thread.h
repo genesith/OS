@@ -112,6 +112,9 @@ struct thread
     struct list child_list;
     struct inode * exec_inode;
     struct list invalid_list;
+    int last_mmapid;
+    void * last_esp;
+    void * last_load;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */

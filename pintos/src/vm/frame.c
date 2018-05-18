@@ -18,19 +18,26 @@ uint8_t * frame_allocate(void){
     struct list_elem * target_elem;
     int sector_num = get_free_swap();
     evict_frame = get_evict_frame();
+    kpage = (uint8_t *) evict_frame->kpage;
+
     // hex_dump(evict_frame->kpage, evict_frame->kpage, 4096, true);
-    swap_out(sector_num, &evict_frame->references, evict_frame->kpage);
+    if (!(evict_frame->is_mmap)){
+      swap_out(sector_num, &evict_frame->references, evict_frame->kpage);
+    
     // memset(evict_frame->kpage, 0, 30);
     // hex_dump(evict_frame->kpage, evict_frame->kpage, 30, true);
     // swap_in(evict_frame->kpage, sector_num);
     // hex_dump(evict_frame->kpage, evict_frame->kpage, 30, true);
 
       //Update Invalid page table;
-    invalid_list_insert(&evict_frame->references, sector_num);
+      invalid_list_insert(&evict_frame->references, sector_num);
+    }
 
-      /*
-      //Update Present bit to 0 for every references of evict frame
-      */
+
+    else{
+      inode_write_at(evict_frame->mmap_inode, kpage, evict_frame->mmap_write_byte, evict_frame->mmap_offset);
+    }
+     
 
     for (target_elem = list_begin(&evict_frame->references); target_elem != list_end(&evict_frame->references); target_elem = list_next(target_elem)){
       struct reference_struct * target_struct = list_entry(target_elem, struct reference_struct, reference_elem);
@@ -38,9 +45,6 @@ uint8_t * frame_allocate(void){
       pagedir_clear_page(target_thread->pagedir, target_struct->vpage);
     }
   
-    kpage = (uint8_t *) evict_frame->kpage;
-    // printf("kpage : %x\n", kpage);
-    
   }
 
     // When there is available pysical memory

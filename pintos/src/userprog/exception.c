@@ -6,7 +6,7 @@
 #include "threads/thread.h"
 #include "userprog/syscall.h"
 #include "userprog/process.h"
-#include "vm/invalidlist.h"
+// #include "vm/invalidlist.h"
 #include "vm/frame.h"
 #include "vm/swap.h"
 #include "threads/vaddr.h"
@@ -161,95 +161,107 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
+  if(user){
+    thread_current()->last_esp = f->esp;
+  }
 
   bool result = false;
-  // printf("fault address : %x %x\n", fault_addr, f->esp);
+  printf("fault address : %x %x %s %x %x\n", fault_addr, f->esp, thread_current()->name, thread_current()->last_esp, thread_current()->last_load);
+  uint32_t new_fault_addr = (uint32_t)((uintptr_t)fault_addr & (uintptr_t)0xfffff000);
+
+  struct invalid_struct * temp_struct = invalid_list_check((uint8_t *) new_fault_addr, 0);
 
   if (not_present && fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)) {
-    if (((fault_addr <= f->esp - 0x1000) && (f->esp <= 0xC0000000)) && (fault_addr >= USER_VADDR_BOTTOM + 0x1000000)){
-    // if ((fault_addr <= f->esp - 0x1000) && (fault_addr >= USER_VADDR_BOTTOM + 0x1000000)){
-      // printf("Address is wrong, %x %x\n", fault_addr, f->esp);
-      exit(-1);
+    if (((uint32_t)fault_addr < (uint32_t)f->esp - 32) && (fault_addr < thread_current()->last_esp)){
+      if (!(temp_struct)){
+      // if(fault_addr < thread_current()->last_esp){
+    
+      // if ((fault_addr <= f->esp - 0x1000) && (fault_addr >= USER_VADDR_BOTTOM + 0x1000000)){
+        printf("Address is wrong, %x %x\n", fault_addr, f->esp);
+        exit(-1);
+      }
     }
-    // printf("Page Fault!!! with %x, %x\n", fault_addr, f->esp-0x1000);
 
-    fault_addr = (void *)((uintptr_t)fault_addr & (uintptr_t)0xfffff000);
+    else{
+      thread_current()->last_esp = fault_addr;
+    }
 
-    struct invalid_struct * target_invalid_struct = invalid_list_check((uint8_t *) fault_addr, 1);
-    // printf("%d %x %x\n", target_invalid_struct->lazy, target_invalid_struct->vpage, fault_addr);
+
+
+    struct invalid_struct * target_invalid_struct = invalid_list_check((uint8_t *) new_fault_addr, 1);
+  // printf("%d %x %x\n", target_invalid_struct->lazy, target_invalid_struct->vpage, fault_addr);
     uint8_t * new_addr = frame_allocate();
 
     if (target_invalid_struct){
 
 
-        if (target_invalid_struct->lazy == 1){
+      if (target_invalid_struct->lazy == 1){
 
-          // printf("lazy");
-          struct file * target_file = file_open(target_invalid_struct->lazy_inode);
+        // printf("lazy");
+        struct file * target_file = file_open(target_invalid_struct->lazy_inode);
 
-          if (!(target_file)){
-            printf("File doesn't open");
-          }
-
-
-
-          file_seek(target_file, target_invalid_struct->lazy_offset);
-          // file_seek(target_file, 0);
-          // printf("lazy offset : %d %d\n", target_invalid_struct->lazy_offset, target_invalid_struct->lazy_write_byte);
-          
-          file_read(target_file, new_addr, target_invalid_struct->lazy_write_byte);
-
-          memset(new_addr + target_invalid_struct->lazy_write_byte, 0, PGSIZE - target_invalid_struct->lazy_write_byte);
-
-          // hex_dump(new_addr, new_addr, 30, true);
-
-          install_page(thread_current()->tid, target_invalid_struct->vpage, (void *) new_addr, true, true);
-
-          // file_close(target_file);
-
+        if (!(target_file)){
+          printf("File doesn't open");
         }
 
-        else{
+
+
+
+        file_seek(target_file, target_invalid_struct->lazy_offset);
+        // file_seek(target_file, 0);
+        // printf("lazy offset : %d %d\n", target_invalid_struct->lazy_offset, target_invalid_struct->lazy_write_byte);
         
-          int sector_num = target_invalid_struct->sector;
-        
-          if (sector_num >= 0){
-            
-            references = swap_in(new_addr, sector_num);
-            // printf("here2");
+        file_read(target_file, new_addr, target_invalid_struct->lazy_write_byte);
 
-            // hex_dump(new_addr, new_addr, 50, true);
-            invalid_list_remove(references);
-            // printf("%d", list_size(references));
-            for (target_elem = list_begin(references); target_elem != list_end(references); target_elem = list_next(target_elem)){
-              struct reference_struct * target_struct = list_entry(target_elem, struct reference_struct, reference_elem);
-              // printf("%d %d %x\n", thread_current()->tid, target_struct->tid, target_struct->vpage);
-              if (i == 0){
-                install_page(target_struct->tid, target_struct->vpage, (void *) new_addr, true, true);
-                i++;
-              }
+        memset(new_addr + target_invalid_struct->lazy_write_byte, 0, PGSIZE - target_invalid_struct->lazy_write_byte);
 
-              else{
-                install_page(target_struct->tid, target_struct->vpage, (void *) new_addr, true, false);
-              }
-            }
+        // hex_dump(new_addr, new_addr, 30, true);
 
-          }
-        }
+        install_page(thread_current()->tid, target_invalid_struct->vpage, (void *) new_addr, true, true, target_invalid_struct);
+
+        // file_close(target_file);
+
       }
 
       else{
-            
-        result = install_page(thread_current()->tid, fault_addr, (void *) new_addr, true, true);
-            // printf("here?? Stack growth result was %d\n", result);  
-      }
+      
+        int sector_num = target_invalid_struct->sector;
+      
+        if (sector_num >= 0){
+          
+          references = swap_in(new_addr, sector_num);
+          // printf("here2");
 
+          // hex_dump(new_addr, new_addr, 50, true);
+          invalid_list_remove(references);
+          // printf("%d", list_size(references));
+          for (target_elem = list_begin(references); target_elem != list_end(references); target_elem = list_next(target_elem)){
+            struct reference_struct * target_struct = list_entry(target_elem, struct reference_struct, reference_elem);
+            // printf("%d %d %x\n", thread_current()->tid, target_struct->tid, target_struct->vpage);
+            if (i == 0){
+              install_page(target_struct->tid, target_struct->vpage, (void *) new_addr, true, true, NULL);
+              i++;
+            }
+
+            else{
+              install_page(target_struct->tid, target_struct->vpage, (void *) new_addr, true, false, NULL);
+            }
+          }
+
+        }
+      }
+    }
+
+    else{
+            
+      result = install_page(thread_current()->tid, new_fault_addr, (void *) new_addr, true, true, NULL);
+            // printf("here?? Stack growth result was %d\n", result);  
+    }
 
   }
-    
   else{
 
-    // printf("why is it??\n");
+    printf("why is it??\n");
     exit(-1);
     
   }

@@ -21,7 +21,6 @@
 #include "vm/frame.h"
 #include "threads/pte.h"
 #include "vm/swap.h"
-#include "vm/invalidlist.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -410,7 +409,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 /* load() helpers. */
 
-bool install_page (int tid, void *upage, void *kpage, bool writable, bool fifo);
+bool install_page (int tid, void *upage, void *kpage, bool writable, bool fifo, struct invalid_struct * target_struct);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -499,12 +498,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       // printf("load %x\n", upage);
       struct invalid_struct * target_struct = (struct invalid_struct *)malloc(sizeof(struct invalid_struct));
+      // printf("load upage : %x %d\n", upage, page_read_bytes);
       target_struct->vpage = upage;
+      thread_current()->last_load = upage;
       target_struct->sector = NULL;
       target_struct->lazy = 1;
       target_struct->lazy_inode = file->inode;
       target_struct->lazy_offset = ofs;
       target_struct->lazy_writable = writable;
+      target_struct->is_mmap = 0;
       // printf("process offset : %d %d\n", ofs, page_read_bytes);
 
       target_struct->lazy_write_byte = page_read_bytes;
@@ -594,7 +596,7 @@ setup_stack (void **esp, char * file_name)
   kpage = frame_allocate ();
   if (kpage != NULL) 
     {
-      success = install_page (thread_current()->tid, ((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true, true);
+      success = install_page (thread_current()->tid, ((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true, true, NULL);
       if (success)
         *esp = PHYS_BASE;
       else
@@ -602,6 +604,7 @@ setup_stack (void **esp, char * file_name)
     }
 
   *esp -= stack_off;
+  thread_current()->last_esp = *esp;
 
   // printf("%c, %s, %x", (char **)esp, (char *)*esp, (char)**esp);
   // printf("stack_offset : %s\n", stack_offset);
@@ -643,7 +646,7 @@ setup_stack (void **esp, char * file_name)
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
 bool
-install_page (int tid, void *upage, void *kpage, bool writable, bool fifo)
+install_page (int tid, void *upage, void *kpage, bool writable, bool fifo, struct invalid_struct * target_struct)
 {
   // printf("install page : %x %x\n", upage, kpage);
 
@@ -660,12 +663,30 @@ install_page (int tid, void *upage, void *kpage, bool writable, bool fifo)
     struct reference_struct * reference = (struct reference_struct * )malloc(sizeof(struct reference_struct));
     reference->tid = t->tid;
     reference->vpage = (uint8_t *) ((uint32_t)upage & BITMASK(12, 32));
+
+
     
     if (fifo){
 
-    struct frame_struct * target_frame = (struct frame_struct * ) malloc(sizeof(struct frame_struct));
-    list_init(&target_frame->references);
-    target_frame->kpage = (uint8_t *) ((uint32_t)kpage & BITMASK(12, 32));
+      struct frame_struct * target_frame = (struct frame_struct * ) malloc(sizeof(struct frame_struct));
+      list_init(&target_frame->references);
+      target_frame->kpage = (uint8_t *) ((uint32_t)kpage & BITMASK(12, 32));
+
+      if(target_struct){
+        if(target_struct->is_mmap == 1){
+          // printf("upage : %x\n", upage);
+          target_frame->mmap_inode = target_struct->lazy_inode;
+          target_frame->mmap_offset = target_struct->lazy_offset;
+          target_frame->is_mmap = 1;
+          target_frame->mmap_write_byte = target_struct->lazy_write_byte;
+          target_frame->mmapid = target_struct->mmapid;
+          target_frame->mmap_tid = t->tid;
+          target_frame->dirty_bit = 0;
+        }
+
+      else
+        target_frame->is_mmap = 0;
+      }
     // printf("1\n");
     list_push_back(&target_frame->references, &reference->reference_elem);
     list_push_back(&FIFO_list, &target_frame->FIFO_elem);
