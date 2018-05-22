@@ -166,18 +166,18 @@ page_fault (struct intr_frame *f)
   }
 
   bool result = false;
-  printf("fault address : %x %x %s %x %x\n", fault_addr, f->esp, thread_current()->name, thread_current()->last_esp, thread_current()->last_load);
+  // printf("fault address : %x %x %s %x %x\n", fault_addr, f->esp, thread_current()->name, thread_current()->last_esp, thread_current()->last_load);
   uint32_t new_fault_addr = (uint32_t)((uintptr_t)fault_addr & (uintptr_t)0xfffff000);
 
   struct invalid_struct * temp_struct = invalid_list_check((uint8_t *) new_fault_addr, 0);
-
+  // printf("reason : %d %x %x %x\n", not_present, fault_addr, f->esp, thread_current()->last_esp);
   if (not_present && fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)) {
     if (((uint32_t)fault_addr < (uint32_t)f->esp - 32) && (fault_addr < thread_current()->last_esp)){
       if (!(temp_struct)){
       // if(fault_addr < thread_current()->last_esp){
     
       // if ((fault_addr <= f->esp - 0x1000) && (fault_addr >= USER_VADDR_BOTTOM + 0x1000000)){
-        printf("Address is wrong, %x %x\n", fault_addr, f->esp);
+        // printf("Address is wrong, %x %x\n", fault_addr, f->esp);
         exit(-1);
       }
     }
@@ -217,14 +217,14 @@ page_fault (struct intr_frame *f)
 
         // hex_dump(new_addr, new_addr, 30, true);
 
-        install_page(thread_current()->tid, target_invalid_struct->vpage, (void *) new_addr, true, true, target_invalid_struct);
+        install_page(thread_current()->tid, target_invalid_struct->vpage, (void *) new_addr, target_invalid_struct->lazy_writable, true, target_invalid_struct);
 
         // file_close(target_file);
 
       }
 
       else{
-      
+     
         int sector_num = target_invalid_struct->sector;
       
         if (sector_num >= 0){
@@ -261,7 +261,7 @@ page_fault (struct intr_frame *f)
   }
   else{
 
-    printf("why is it??\n");
+    // printf("why is it??\n");
     exit(-1);
     
   }

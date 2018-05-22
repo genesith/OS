@@ -134,27 +134,29 @@ void do_munmap(int mapid, int tid){
         	// printf("%d %d\n", target_struct_two->mmapid, mapid);
           	if(target_struct_two->mmapid == mapid){
             	remove_last = true;
-
-
             	struct list_elem * mmap_elem;
-            	
             	for (mmap_elem = list_begin(&target_struct_two->references); mmap_elem != list_end(&target_struct_two->references); mmap_elem = list_next(mmap_elem)){
             		struct reference_struct * mmap_reference = list_entry(mmap_elem, struct reference_struct, reference_elem);
-            		// printf("%d %d\n", tid, mmap_reference->tid);
-            		if (tid == mmap_reference->tid){
-            			if (i == 0){
-            				if (pagedir_is_dirty(target_thread->pagedir, mmap_reference->vpage)){
-            					inode_write_at(target_struct_two->mmap_inode, target_struct_two->kpage, target_struct_two->mmap_write_byte, target_struct_two -> mmap_offset);
-            					i++;
-            				}
-            			}
+                    if (pagedir_is_dirty(target_thread->pagedir, mmap_reference->vpage)){
+                        inode_write_at(target_struct_two->mmap_inode, target_struct_two->kpage, target_struct_two->mmap_write_byte, target_struct_two -> mmap_offset);
+                    }
+                    // pagedir_clear_page(target_thread->pagedir, mmap_reference->vpage);
+                    break;
+
+
+            		// if (tid == mmap_reference->tid){
+            		// 	if (i == 0){
+              //                   inode_write_at(target_struct_two->mmap_inode, target_struct_two->kpage, target_struct_two->mmap_write_byte, target_struct_two -> mmap_offset);
+              //                   pagedir_clear_page(target_thread->pagedir, mmap_reference->vpage);
+              //                   i++;
+            		// 		}
+            		// 	}
 
             			// printf("clear page : %x\n", mmap_reference->vpage);
 
             			// Remove reference_elem in list of frame_struct
 
-            			pagedir_clear_page(target_thread->pagedir, mmap_reference->vpage);
-            		}
+            		
             		
             	}
 

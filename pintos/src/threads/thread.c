@@ -505,6 +505,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back (&all_list, &t->allelem);
   list_init(&t->child_list);
   list_init(&t->invalid_list);
+  list_init(&t->mmap_list);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

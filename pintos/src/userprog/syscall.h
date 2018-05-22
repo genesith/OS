@@ -18,4 +18,10 @@ struct fd_struct {
 	struct semaphore file_sema;
 };
 
+struct mmap_struct{
+	int mapid;
+	int inode_num;
+	struct list_elem mmap_elem;
+};
+
 #endif /* userprog/syscall.h */

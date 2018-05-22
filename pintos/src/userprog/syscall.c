@@ -302,7 +302,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       //   break;
       // }
 
-      // printf("write code : %x %x\n", param2, thread_current()->last_load);
+      // printf("write code : %d %x %x\n", param1, param2, thread_current()->last_load);
 
 
       if ((check_invalid_pointer((void *) param2)) || (!(is_there_or_should_be((void *) param2)))){
@@ -315,28 +315,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       uint8_t * new_addr = (uint32_t)((uintptr_t)param2 & (uintptr_t)0xfffff000);
 
       struct invalid_struct * target_struct = invalid_list_check(new_addr, 0);
-
-      if ((param2 < thread_current()->last_load)){
-        if (is_there_or_should_be((void *)new_addr)){
-          if (target_struct){
-            if(target_struct->lazy == 1){
-              printf("case1\n");
-            }
-            else{
-              printf("case2\n");
-            }
-          }
-          else{
-            printf("case 3 %d\n", pagedir_is_writable(thread_current()->pagedir, param2));
-          }
-        }
-        else{
-          printf("case4\n");
-        }
-      }
-      else{
-        printf("case5\n");
-      } 
 
 
       if (param1 == 1){
@@ -429,10 +407,46 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_MMAP:
     {
     //param 1 is fd,  param 2 is (void *) address
+      // printf("mmap : %x %x\n", param2, f->esp);
+
+
+
+
+      void * new_esp = (void *)((uintptr_t)f->esp & (uintptr_t)0xfffff000);
+
+      if ((check_invalid_pointer((void *) param2)) || (param2 % PGSIZE != 0) || (param2 < thread_current()->last_load + PGSIZE) || (new_esp <= param2) || (is_there_or_should_be(param2))){
+          // printf("%x %x\n", param2 , thread_current()->last_load + PGSIZE);
+          // printf("why?\n");
+          f->eax = -1;
+          // exit(-1);
+          break;
+        
+      }
+
       int data_length = PGSIZE, offset = 0;
       int new_mmapid = thread_current()->last_mmapid++;
       struct fd_struct * mmap_file = find_by_fd(param1);
       uint32_t mmap_length = file_length(mmap_file->the_file);
+
+      // struct list_elem * target_elem;
+      // bool duplicate = 0;
+      // for (target_elem = list_begin(&thread_current()->mmap_list); target_elem != list_end(&thread_current()->mmap_list); target_elem = list_next(target_elem)){
+      //   struct mmap_struct * temp_struct = list_entry(target_elem, struct mmap_struct, mmap_elem);
+      //   // printf("mmap : %d %d\n", temp_struct->inode_num, inode_get_inumber(mmap_file->the_file->inode));
+      //   if (temp_struct->inode_num == inode_get_inumber(mmap_file->the_file->inode)){
+      //     f->eax = -1;
+      //     duplicate = 1;
+      //     break;
+      //   } 
+      // }
+
+      // if(duplicate)
+      //   break;
+
+
+
+
+
 
       // printf("file length is %d\n", mmap_length);
 
@@ -464,6 +478,12 @@ syscall_handler (struct intr_frame *f UNUSED)
         offset += data_length;
       }
 
+      // struct mmap_struct * new_mmap_struct = (struct mmap_struct *) malloc(sizeof(struct mmap_struct));
+      // new_mmap_struct->inode_num = inode_get_inumber(mmap_file->the_file->inode);
+      // new_mmap_struct->mapid = new_mmapid;
+      // list_push_back(&thread_current()->mmap_list, &new_mmap_struct->mmap_elem);
+      // printf("new_mmap : %d\n", inode_get_inumber(mmap_file->the_file->inode));
+
       f->eax = new_mmapid;
       // printf("return : %d\n", new_mmapid);
       break;
@@ -474,6 +494,14 @@ syscall_handler (struct intr_frame *f UNUSED)
     
     {
       do_munmap(param1, thread_current()->tid);
+      // struct list_elem * target_elem;
+      // for (target_elem = list_begin(&thread_current()->mmap_list); target_elem != list_end(&thread_current()->mmap_list); target_elem = list_next(target_elem)){
+      //   struct mmap_struct * temp_struct = list_entry(target_elem, struct mmap_struct, mmap_elem);
+      //   if (temp_struct->mapid == param1){
+      //     list_remove(target_elem);
+      //     break;
+      //   } 
+      // }
       break;
     }
 

@@ -115,6 +115,7 @@ struct thread
     int last_mmapid;
     void * last_esp;
     void * last_load;
+    struct list mmap_list;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
