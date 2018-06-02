@@ -157,7 +157,6 @@ process_exit (void)
 
     }
 }
-
 /* Sets up the CPU for running user code in the current
    thread.
    This function is called on every context switch. */
@@ -684,8 +683,8 @@ install_page (int tid, void *upage, void *kpage, bool writable, bool fifo, struc
           target_frame->dirty_bit = 0;
         }
 
-      else
-        target_frame->is_mmap = 0;
+        else
+          target_frame->is_mmap = 0;
       }
     // printf("1\n");
     list_push_back(&target_frame->references, &reference->reference_elem);

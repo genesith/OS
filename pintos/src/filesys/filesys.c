@@ -6,6 +6,7 @@
 #include "filesys/free-map.h"
 #include "filesys/inode.h"
 #include "filesys/directory.h"
+#include "filesys/cache.h"
 #include "threads/synch.h"
 
 /* Partition that contains the file system. */
@@ -24,6 +25,8 @@ filesys_init (bool format)
 
   inode_init ();
   free_map_init ();
+  cache_init();
+
 
   if (format) 
     do_format ();
@@ -73,14 +76,10 @@ filesys_open (const char *name)
   // printf("0\n");
   struct dir *dir = dir_open_root ();
   struct inode *inode = NULL;
-  // printf("1\n");
   if (dir != NULL)
-    // printf("2\n");
     dir_lookup (dir, name, &inode);
-  // printf("3\n");
   dir_close (dir);
-  // printf("4\n");
-  // printf("%d\n", (inode==NULL));
+
 
   return file_open (inode);
 }
@@ -104,7 +103,9 @@ static void
 do_format (void)
 {
   printf ("Formatting file system...");
+  
   free_map_create ();
+
   if (!dir_create (ROOT_DIR_SECTOR, 16))
     PANIC ("root directory creation failed");
   free_map_close ();
