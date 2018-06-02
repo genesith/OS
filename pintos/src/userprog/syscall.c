@@ -560,6 +560,7 @@ void exit(int status){
   struct list_elem * temp;
   for(temp = list_begin(&thread_current()->child_list); temp != list_end(&thread_current()->child_list); temp = list_next(temp)){
     struct thread * temp_thread = list_entry(temp, struct thread, child_elem);
+    // if(temp_thread->status == THREAD_BLOCKED)
     thread_unblock(temp_thread);
     // printf("kk\n");
   }

@@ -188,7 +188,8 @@ thread_create (const char *name, int priority,
   t->parent_thread = thread_current();
   sema_init(&t->child_sema, 0);
   sema_init(&t->fd_list_lock, 1);
-  list_push_back(&thread_current()->child_list, &t->child_elem);
+  if (strcmp(name, "Read_aheader"))
+    list_push_back(&thread_current()->child_list, &t->child_elem);
   // sema_down(&t->process_sema);
 
 
@@ -248,7 +249,7 @@ thread_block (void)
 {
   ASSERT (!intr_context ());
   ASSERT (intr_get_level () == INTR_OFF);
-
+  // printf("block thread name : %s\n", thread_current()->name);
   thread_current ()->status = THREAD_BLOCKED;
   // printf("1");
   schedule ();
@@ -270,8 +271,17 @@ thread_unblock (struct thread *t)
   ASSERT (is_thread (t));
 
   old_level = intr_disable ();
+  // printf("unblock thread name : %s\n", t->name);
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // if (t->name == "Flusher"){
+  if ((!(strcmp(t->name, "Flusher"))) || (!(strcmp(t->name, "Read_aheader")))) {
+    // printf("name is flusher");
+    list_push_front(&ready_list, &t->elem);
+  }
+  else{
+    list_push_back (&ready_list, &t->elem);
+  }
+
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }

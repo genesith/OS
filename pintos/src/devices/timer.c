@@ -95,10 +95,11 @@ timer_sleep (int64_t ticks)
 {
   int64_t start = timer_ticks ();
   struct thread * t = thread_current();
-  if (ticks >0) {
-	  intr_disable();
+  if (ticks > 0) {
+	  enum intr_level old_level = intr_disable();
 	  put_waitlist(t, start+ticks);
 	  thread_block();
+    intr_set_level(old_level);
   }
   /*
   ASSERT (intr_get_level () == INTR_ON);
@@ -261,14 +262,16 @@ static void put_waitlist(struct thread * t, int64_t wakeup){
     list_push_back(&wait_list, &t->wait_elem);
     return;
 }
+
 static void check_wakelist(){
+
     struct list_elem * temp;
     for (temp =list_begin(&wait_list); temp!= list_end(&wait_list); temp= list_next (temp)){
-        struct thread *t = list_entry(temp, struct thread, wait_elem);
-	if(t->wakeup_time == ticks){
-	    thread_unblock(t);
-	    list_remove(&t->wait_elem);
-	}
+      struct thread *t = list_entry(temp, struct thread, wait_elem);
+      if(t->wakeup_time == ticks){
+        thread_unblock(t);
+	      list_remove(&t->wait_elem);
+	    }
     }
     return;
 }
