@@ -35,7 +35,7 @@ void cache_init(){
 	is_read_aheader = 0;
 	read_aheader_sector = -1;
 	sema_init(&read_aheader_sema, 1);
-	thread_create("Flusher", PRI_DEFAULT, flusher, NULL);
+	// thread_create("Flusher", PRI_DEFAULT, flusher, NULL);
 
 	return;
 }

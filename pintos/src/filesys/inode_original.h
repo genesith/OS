@@ -6,26 +6,15 @@
 #include "devices/block.h"
 #include <list.h>
 
-#define TOTAL_BLOCK_NUM 12
-#define DIRECT_BLOCK_NUM 10
-#define INDIRECT_BLOCK_NUM 1
-#define DOUBLY_INDIRECT_BLOCK_NUM 1
-#define INDERECT_PTRS 128
-
+#define DIRECT_BLOCK_NUM 12
 struct bitmap;
 
 struct inode_disk
   {
-
-    block_sector_t blocks[TOTAL_BLOCK_NUM];
-    int direct_idx;                     /* 0 ~ 11 */
-    int indirect_idx;                   /* 0 ~ 127 */
-    int doubly_indirect_idx;            /* 0 ~ 127 */
-
+    block_sector_t start;               /* First data sector. */
     off_t length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[111];               /* Not used. */
-    
+    uint32_t unused[125];               /* Not used. */
   };
 
 
@@ -36,15 +25,7 @@ struct inode
     int open_cnt;                       /* Number of openers. */
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
-
-
-    int length;
-    block_sector_t blocks[TOTAL_BLOCK_NUM];
-    int direct_idx;                     /* 0 ~ 11 */
-    int indirect_idx;                   /* 0 ~ 127 */
-    int doubly_indirect_idx;            /* 0 ~ 127 */
-  
-
+    struct inode_disk data;             /* Inode content. */
   };
 
 

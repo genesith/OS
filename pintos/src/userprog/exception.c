@@ -172,7 +172,7 @@ page_fault (struct intr_frame *f)
   struct invalid_struct * temp_struct = invalid_list_check((uint8_t *) new_fault_addr, 0);
   // printf("reason : %d %x %x %x\n", not_present, fault_addr, f->esp, thread_current()->last_esp);
   if (not_present && fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)) {
-    if (((uint32_t)fault_addr < (uint32_t)f->esp - 32) && (fault_addr < thread_current()->last_esp)){
+    if (((uint32_t)fault_addr < (uint32_t)thread_current()->last_esp - 32) && (fault_addr < thread_current()->last_esp)){
       if (!(temp_struct)){
       // if(fault_addr < thread_current()->last_esp){
     

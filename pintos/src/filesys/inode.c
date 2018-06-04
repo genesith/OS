@@ -29,6 +29,15 @@ bytes_to_sectors (off_t size)
    within INODE.
    Returns -1 if INODE does not contain data for a byte at offset
    POS. */
+
+
+/*
+  Return appropriate sector
+
+*/
+
+
+
 static block_sector_t
 byte_to_sector (const struct inode *inode, off_t pos) 
 {
@@ -73,21 +82,17 @@ inode_create (block_sector_t sector, off_t length)
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
+      disk_inode->direct_idx = 0;
+      disk_inode->indirect_idx = 0;
+      disk_inode->doubly_indirect_idx = 0;
+
       if (free_map_allocate (sectors, &disk_inode->start)) 
         {
           // block_write (fs_device, sector, disk_inode);
           cache_write (sector, disk_inode);
+          success = true;
           // cache_write(sector, disk_inode);
-          if (sectors > 0) 
-            {
-              static char zeros[BLOCK_SECTOR_SIZE];
-              size_t i;
-              
-              for (i = 0; i < sectors; i++) 
-                // block_write (fs_device, disk_inode->start + i, zeros);
-                cache_write(disk_inode->start + i, zeros);
-            }
-          success = true; 
+
         } 
       free (disk_inode);
     }
@@ -126,8 +131,18 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
+
+  void * buf = malloc(sizeof *inode_disk);
+
   // block_read (fs_device, inode->sector, &inode->data);
-  cache_read (inode->sector, &inode->data);
+  cache_read (inode->sector, buf);
+  inode->direct_idx = buf->direct_idx;
+  inode->indirect_idx = buf->indirect_idx;
+  inode->doubly_indirect_idx = buf->doubly_indirect_idx;
+  inode->length = buf->length;
+  memcpy(inode->blocks, buf->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
+  free(buf);
+
   return inode;
 }
 
@@ -150,6 +165,11 @@ inode_get_inumber (const struct inode *inode)
 /* Closes INODE and writes it to disk.
    If this was the last reference to INODE, frees its memory.
    If INODE was also a removed inode, frees its blocks. */
+
+/*
+  free_map_release, Delete all sectors individually by searching BLOCKS;
+
+*/
 void
 inode_close (struct inode *inode) 
 {
@@ -246,6 +266,11 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
    less than SIZE if end of file is reached or an error occurs.
    (Normally a write at end of file would extend the inode, but
    growth is not yet implemented.) */
+
+/*
+  If byte_to_sector returns -1, expand blocks and write it
+*/
+
 off_t
 inode_write_at (struct inode *inode, const void *buffer_, off_t size,
                 off_t offset) 
@@ -261,6 +286,16 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     {
       /* Sector to write, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (inode, offset);
+      
+      if (sector_idx == -1){
+          
+        int writen_by_expand = expand_block(inode, offset, size);
+        bytes_written += writen_by_expand;
+        return bytes_written;
+
+      }
+
+
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -312,6 +347,11 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   free (bounce);
 
   return bytes_written;
+}
+
+
+int expand_block(){
+  return 0;
 }
 
 /* Disables writes to INODE.
