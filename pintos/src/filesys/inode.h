@@ -10,7 +10,7 @@
 #define DIRECT_BLOCK_NUM 10
 #define INDIRECT_BLOCK_NUM 1
 #define DOUBLY_INDIRECT_BLOCK_NUM 1
-#define INDERECT_PTRS 128
+#define INDIRECT_PTRS 128
 
 struct bitmap;
 
@@ -22,9 +22,10 @@ struct inode_disk
     int indirect_idx;                   /* 0 ~ 127 */
     int doubly_indirect_idx;            /* 0 ~ 127 */
 
-    off_t length;                       /* File size in bytes. */
+    off_t current_length;
+    off_t max_length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[111];               /* Not used. */
+    uint32_t unused[110];               /* Not used. */
     
   };
 
@@ -38,7 +39,8 @@ struct inode
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
 
 
-    int length;
+    off_t max_length;
+    off_t current_length;
     block_sector_t blocks[TOTAL_BLOCK_NUM];
     int direct_idx;                     /* 0 ~ 11 */
     int indirect_idx;                   /* 0 ~ 127 */
@@ -64,5 +66,7 @@ off_t inode_write_at (struct inode *, const void *, off_t size, off_t offset);
 void inode_deny_write (struct inode *);
 void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
+void expand_block(struct inode * inode, off_t size);
+
 
 #endif /* filesys/inode.h */
