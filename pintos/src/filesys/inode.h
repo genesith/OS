@@ -21,11 +21,12 @@ struct inode_disk
     int direct_idx;                     /* 0 ~ 11 */
     int indirect_idx;                   /* 0 ~ 127 */
     int doubly_indirect_idx;            /* 0 ~ 127 */
+    int is_dir;
 
     off_t current_length;
     off_t max_length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[110];               /* Not used. */
+    uint32_t unused[109];               /* Not used. */
     
   };
 
@@ -37,6 +38,7 @@ struct inode
     int open_cnt;                       /* Number of openers. */
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
+    int is_dir;
 
 
     off_t max_length;

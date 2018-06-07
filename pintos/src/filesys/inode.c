@@ -104,7 +104,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, int is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -142,6 +142,7 @@ inode_create (block_sector_t sector, off_t length)
       disk_inode->direct_idx = temp_inode->direct_idx;
       disk_inode->indirect_idx = temp_inode->indirect_idx;
       disk_inode->doubly_indirect_idx = temp_inode->doubly_indirect_idx;
+      disk_inode->is_dir = is_dir;
       memcpy(disk_inode->blocks, temp_inode->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
 
 
@@ -202,6 +203,7 @@ inode_open (block_sector_t sector)
   // printf("open_inode : %u %u %u %u\n", inode->sector, inode->direct_idx, inode->indirect_idx, inode->doubly_indirect_idx);
   inode->max_length = buf->max_length;
   inode->current_length = buf->current_length;
+  inode->is_dir = buf->is_dir;
   memcpy(inode->blocks, buf->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
   free(buf);
 

@@ -505,8 +505,22 @@ syscall_handler (struct intr_frame *f UNUSED)
       break;
     }
 
+    case SYS_MKDIR:
+    {
+      create_
+      printf("mkdir\n");
+      break;
+    }
+
+    case SYS_CHDIR:
+    {
+      printf("chdir\n");
+      break;
+    }
+
     default:
     {
+      // printf("Something else!!\n");
       f->eax = -1;
       break;
     }
