@@ -65,25 +65,6 @@ void cache_read(block_sector_t sector, void *buffer){
 	// printf("read2\n");
 	target_struct->count += 1;
 
-
-	// if (is_read_aheader == 0){
-	// 	if (cache_search(sector+1) == NULL){
-
-	// 		read_aheader_sector = sector+1;
-	// 		is_read_aheader = 1;
-	// 		// read_aheader_sector = new_sector
-	// 		// printf("read aheader : %x\n", read_aheader_sector);
-	// 		// lock_acquire(&read_aheader_lock);
-	// 		sema_down(&read_aheader_sema);
-	// 		// char name[20];
-	// 		// snprintf(name, 25, "Read_aheader %x", read_aheader_sector);
-	// 		// printf("create %s\n", name);
-	// 		thread_create("Read_aheader", PRI_DEFAULT, cache_read_aheader, (void *)read_aheader_sector);
-	// 		// thread_yield();
-	// 	}
-	// }
-
-
 	memcpy(buffer, target_struct->data, SECTORSIZE);
 	lock_release(&buffer_cache_lock);
 	// lock_release(&buffer_lock);
