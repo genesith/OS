@@ -282,7 +282,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   // printf("Parent : %s, memcmp : %s\n", t->parent_thread->name, t->name);
   // printf("thread_current : %s, tid : %d\n", thread_current()->name, thread_current()->tid);
   // free(temp);
-  file = filesys_open(file_name);
+  file = filesys_open(file_name, NULL);
   // / / printf("hahah\n");
   if (file == NULL) 
     {

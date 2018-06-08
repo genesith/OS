@@ -106,6 +106,7 @@ inode_init (void)
 bool
 inode_create (block_sector_t sector, off_t length, int is_dir)
 {
+  // printf("create %u %x\n", sector, is_dir);
   struct inode_disk *disk_inode = NULL;
   bool success = false;
 
@@ -142,7 +143,13 @@ inode_create (block_sector_t sector, off_t length, int is_dir)
       disk_inode->direct_idx = temp_inode->direct_idx;
       disk_inode->indirect_idx = temp_inode->indirect_idx;
       disk_inode->doubly_indirect_idx = temp_inode->doubly_indirect_idx;
+
       disk_inode->is_dir = is_dir;
+      // disk_inode->parent_dir = parent_dir;
+
+      // memcpy(disk_inode->parent_dir, parent_dir, sizeof(struct dir));
+
+      // printf("disk_inode is_dir : %x\n", disk_inode->is_dir);
       memcpy(disk_inode->blocks, temp_inode->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
 
 
@@ -165,6 +172,7 @@ inode_create (block_sector_t sector, off_t length, int is_dir)
 struct inode *
 inode_open (block_sector_t sector)
 {
+
   struct list_elem *e;
   struct inode *inode;
 
@@ -204,9 +212,17 @@ inode_open (block_sector_t sector)
   inode->max_length = buf->max_length;
   inode->current_length = buf->current_length;
   inode->is_dir = buf->is_dir;
+  // inode->parent_dir = NULL;
+  // if (inode->is_dir = 1)
+    // if (!(buf->parent_dir))
+      // memcpy(inode->parent_dir, buf->parent_dir, sizeof(struct dir));
+
+
+
   memcpy(inode->blocks, buf->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
   free(buf);
 
+  // printf("open %u %x\n", inode->sector, inode->is_dir);
   return inode;
 }
 
@@ -348,7 +364,12 @@ inode_close (struct inode *inode)
         save_inode->doubly_indirect_idx = inode->doubly_indirect_idx;
         save_inode->max_length = inode->max_length;
         save_inode->current_length = inode->current_length;
+        save_inode->is_dir = inode->is_dir;
         memcpy(save_inode->blocks, inode->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
+        // save_inode->parent_dir = NULL;
+        // if(inode->parent_dir)
+        //   memcpy(save_inode->parent_dir, inode->parent_dir, sizeof(struct dir));
+
         cache_write(inode->sector, save_inode);
         // free(save_inode->blocks);
         free (save_inode);

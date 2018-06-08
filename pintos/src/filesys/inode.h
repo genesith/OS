@@ -23,10 +23,12 @@ struct inode_disk
     int doubly_indirect_idx;            /* 0 ~ 127 */
     int is_dir;
 
+    struct dir * parent_dir;
+
     off_t current_length;
     off_t max_length;                       /* File size in bytes. */
     unsigned magic;                     /* Magic number. */
-    uint32_t unused[109];               /* Not used. */
+    uint32_t unused[108];               /* Not used. */
     
   };
 
@@ -39,6 +41,8 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     int is_dir;
+
+    struct dir * parent_dir;
 
 
     off_t max_length;

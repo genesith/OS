@@ -13,7 +13,7 @@ bool check_invalid_pointer(void * addr);
 void exit(int status);
 
 struct fd_struct {
-	bool is_dir;
+	int is_dir;
 	int fd;
 	struct file* the_file;
 	struct dir* the_dir; 

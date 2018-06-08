@@ -175,7 +175,13 @@ syscall_handler (struct intr_frame *f UNUSED)
         break;
       }
 
-      bool result = filesys_create((char *) param1, (off_t) param2, false);
+      if (!(strcmp((char *)param1, ""))){
+        // printf("empty??\n");
+        exit(-1);
+        // break;
+      }
+
+      bool result = filesys_create((char *) param1, (off_t) param2, 0);
       f->eax = result;
       break;
     
@@ -207,33 +213,73 @@ syscall_handler (struct intr_frame *f UNUSED)
 
       struct fd_struct * file_fd = malloc(sizeof(struct fd_struct));
       file_fd->fd = allocate_fd();
-      struct file * target_file;
+      
+      struct inode * temp_inode = NULL;
+      struct dir * target_dir = (struct dir *) malloc(sizeof(struct dir));
+      struct dir * temp_dir;
+      char target_file_name[MAX_FILE_LEN];
+      bool result = false;
 
-      if ((target_file = filesys_open((char *)param1))){
+      // printf("target_file_name : %s\n", param1);  
+      if (!(strcmp((char *)param1, ""))){
+        f->eax = -1;
+        break;
+      }
+      parse_into_parts((char *) param1, target_dir, target_file_name);
 
-        file_fd->is_dir = 0;
+      // printf("%s %u\n", target_file_name, dir_get_inode(target_dir)->sector);
 
-        file_fd->the_file = target_file;
-        if (target_file->inode->deny_write_cnt > 0){
-          file_deny_write(target_file);
-          // target_file->inode->deny_write_cnt++;
+      if (dir_lookup(target_dir, target_file_name, &temp_inode)){
+        if (temp_inode->is_dir == 1){
+
+          struct dir * open_dir = dir_open(temp_inode);
+          file_fd->is_dir = 1;
+          file_fd->the_file = NULL;
+          file_fd->the_dir = open_dir;
+
         }
-        sema_init(&file_fd->file_sema, 1);
-        list_push_back(&thread_current()->fd_list, &file_fd->fd_elem);
 
-        f->eax = file_fd->fd; 
+        else{
+
+          struct file * target_file;
+
+          if ((target_file = filesys_open(target_file_name, target_dir))){
+
+            file_fd->is_dir = 0;
+            file_fd->the_file = target_file;
+            file_fd->the_dir = NULL;
+
+            if (target_file->inode->deny_write_cnt > 0){
+              file_deny_write(target_file);
+              // target_file->inode->deny_write_cnt++;
+            }
+            sema_init(&file_fd->file_sema, 1);
+            list_push_back(&thread_current()->fd_list, &file_fd->fd_elem);
+
+          }
+
+          else{
+            f->eax = -1;
+            break;
+          }
+
+        }
       }
 
-      else
+      else{
         f->eax = -1;
+        break;
+      }
 
-      
 
-      
 
+      f->eax = file_fd->fd;
+
+      // f->eax = success;
       break;
+
     }
-  	
+
   	case SYS_FILESIZE:
   	
     {
@@ -419,25 +465,6 @@ syscall_handler (struct intr_frame *f UNUSED)
       struct fd_struct * mmap_file = find_by_fd(param1);
       uint32_t mmap_length = file_length(mmap_file->the_file);
 
-      // struct list_elem * target_elem;
-      // bool duplicate = 0;
-      // for (target_elem = list_begin(&thread_current()->mmap_list); target_elem != list_end(&thread_current()->mmap_list); target_elem = list_next(target_elem)){
-      //   struct mmap_struct * temp_struct = list_entry(target_elem, struct mmap_struct, mmap_elem);
-      //   // printf("mmap : %d %d\n", temp_struct->inode_num, inode_get_inumber(mmap_file->the_file->inode));
-      //   if (temp_struct->inode_num == inode_get_inumber(mmap_file->the_file->inode)){
-      //     f->eax = -1;
-      //     duplicate = 1;
-      //     break;
-      //   } 
-      // }
-
-      // if(duplicate)
-      //   break;
-
-
-
-
-
 
       // printf("file length is %d\n", mmap_length);
 
@@ -499,12 +526,12 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_MKDIR:
     {
 
-      struct dir ** target_dir;
-      char * output_name;
-      // char output_name[16];
-      parse_into_parts((char *)param1, target_dir, output_name);
+      if (!(strcmp((char *)param1, ""))){
+        f->eax = false;
+        break;
+      }
 
-      bool success = filesys_create(param1, 0 ,true);
+      bool success = filesys_create(param1, 0 , 1);
       f->eax = success;
       break;
     }
@@ -515,27 +542,103 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_CHDIR:
     {
 
-      
+      struct inode * temp_inode = NULL;
+      struct dir * target_dir = (struct dir *) malloc(sizeof(struct dir));
+      struct dir * temp_dir;
+      char target_file_name[50];
+      bool result = false;
+
+      parse_into_parts((char *) param1, target_dir, target_file_name);
+      // printf("%s %u\n", target_file_name, dir_get_inode(target_dir)->sector);
+
+      if (dir_lookup(target_dir, target_file_name, &temp_inode)){
+        // printf("Found\n");
+        if (temp_inode->is_dir == 1){
+          // printf("is_dir\n");
+          thread_current()->directory = dir_open(temp_inode);
+          result = true;
+        }
+      }
+
+      f->eax = result;
 
       // f->eax = success;
       break;
     }
 
-    case SYS_READDIR:
-    {
-      break;
-    }
-
     case SYS_ISDIR:
     {
-      break;
+
+        int fd = (int) param1;
+        bool result = false;
+
+        struct fd_struct * temp_struct = find_by_fd(fd);
+        if (temp_struct -> is_dir == true){
+            result = true;
+          }
+
+        f->eax = result;
+        break;
     }
 
-    case SYS_INUMBER:
+    case SYS_READDIR:
     {
-      break;
 
-    }
+        int fd = param1;
+        char * target_buf = param2;
+        char * dir_name[READDIR_MAX_LEN+1];
+        bool result;
+        struct dir * target_dir;
+
+        struct dir_entry e;
+        size_t ofs;
+
+        struct fd_struct * temp_struct = find_by_fd(fd);
+        if (temp_struct -> is_dir == 1){
+            target_dir = temp_struct -> the_dir;
+            struct inode * target_inode = target_dir->inode;
+            block_sector_t target_sector = target_inode -> sector;
+            struct dir * parent_dir = target_inode-> parent_dir;
+            for (ofs = 0; inode_read_at(parent_dir ->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e){
+              if (e.in_use && e.inode_sector == target_sector)
+                  result = true;
+                  strlcpy(dir_name, e.name, strlen(e.name)+1);
+                  break;
+              }
+        }
+        if (result)
+          strlcpy(param2, dir_name, strlen(dir_name)+1);
+      
+         f->eax = result;
+         break;
+
+      }
+
+
+      case SYS_INUMBER:
+      {
+          int fd = param1;
+          block_sector_t return_sector = NULL;
+          struct fd_struct * temp_struct = find_by_fd(fd);
+          struct inode * target_inode;
+
+          if (temp_struct -> is_dir == 1){
+              //when directory
+              target_inode = (temp_struct -> the_dir) -> inode;
+              return_sector = target_inode->sector;
+          }
+          else{
+              if (temp_struct ->the_file)
+                  target_inode = (temp_struct -> the_file)-> inode;
+                  return_sector = target_inode -> sector;
+          }
+          f->eax = return_sector;
+          if (return_sector == NULL)
+              f->eax = -1;
+          break;
+        }
+
+
     default:
     {
       // printf("Something else!!\n");

@@ -49,20 +49,16 @@ filesys_done (void)
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
 bool
-filesys_create (const char *name, off_t initial_size, bool is_dir) 
+filesys_create (const char *name, off_t initial_size, int is_dir) 
 {
-  printf("create\n");
+  // printf("create\n");
 
   struct dir * target_dir = (struct dir *) malloc(sizeof(struct dir));
-  char target_file_name[50];
-    // struct dir target_dir2;
-  // char target_file_name2[16];
+  char target_file_name[MAX_FILE_LEN];
 
-  // printf("%x %x %x %x\n", target_dir, target_file_name, &target_dir2, &target_file_name2);
   parse_into_parts(name, target_dir, target_file_name);
-  // printf("target_dir : %x\n", target_dir1);
-  // printf("thread_Current : %s file_name : %s, directory sector : %u\n", thread_current()->name, target_file_name, dir_get_inode(target_dir)->sector); 
- 
+
+
   block_sector_t inode_sector = 0;
   bool success = (target_dir != NULL
                   && free_map_allocate (1, &inode_sector)
@@ -82,11 +78,14 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file *
-filesys_open (const char *name)
+filesys_open (const char *name, struct dir * dir)
 {
   // printf("%s\n", name);
   // printf("0\n");
-  struct dir *dir = dir_open_root ();
+  if (!(dir)){
+    dir = dir_open_root();
+  }
+  // struct dir *dir = dir_open_root ();
   struct inode *inode = NULL;
   if (dir != NULL)
     dir_lookup (dir, name, &inode);
@@ -126,14 +125,18 @@ do_format (void)
 }
 
 
+
 void parse_into_parts(char * path_string, struct dir * output_dir, char* output_name){
-    char begin[50];
-    char second[50];
+    char begin[MAX_FILE_LEN];
+    char second[MAX_FILE_LEN];
     struct dir* temp_dir;
     int terms = 0;
-    struct inode ** inode_holder;
+    struct inode * inode_holder = NULL;
+
     memcpy(begin, path_string, strlen(path_string) + 1);
+
     bool error = false;
+    bool single = 0;
 
     if ((path_string[0]=='/') || (!(thread_current()->directory))){
       // printf("root");
@@ -145,25 +148,31 @@ void parse_into_parts(char * path_string, struct dir * output_dir, char* output_
       // printf("parse dir : %x\n", temp_dir);
     }
 
-    char * token, *save_ptr, *prev;
+    char * token, *token1, *save_ptr, *save_ptr2;
+    char prev[MAX_FILE_LEN];
+    char next[MAX_FILE_LEN];
 
     for (token = strtok_r(begin, "/", &save_ptr); token!=NULL; token = strtok_r (NULL, "/", &save_ptr) ){
         terms += 1;
         // printf("term #: %d, token : %s\n", terms, token);
-
     }
     // printf ("Terms read : %d\n", terms);
     memcpy(second, path_string, strlen(path_string) + 1);
-    // printf("0 %s\n", begin);
+    // printf("second: %s\n", second);
     if (terms >1){
-      for (token = strtok_r(second, "/", &save_ptr); (token!=NULL) && (terms > 1) ; token = strtok_r (NULL, "/", &save_ptr), terms-=1 ){
-        // printf("find %s\n", token);
-        // prev = token;
-        if (dir_lookup(temp_dir, prev, inode_holder)){
-          // printf("success to find\n");
-          if ((*inode_holder)->is_dir){
-            // printf("b\n");
-            temp_dir = dir_open(*inode_holder);
+      for (token1 = strtok_r(second, "/", &save_ptr2); (token1!=NULL) && (terms > 1) ; token1 = strtok_r(NULL, "/", &save_ptr2), terms-=1){
+        memcpy(prev, token1, strlen(token1)+1);
+
+        //memcpy(next, save_ptr2, strlen(save_ptr2)+1);
+
+        // printf("first strtok gave token1 as %s, sent to prev: %s. Now there is %s reamining on string\n", prev, token1, save_ptr2);
+
+        if (dir_lookup(temp_dir, prev, &inode_holder)){
+          // printf("success to find using prev: %s\n", prev);
+          if ((inode_holder->is_dir) == 1){
+            
+            temp_dir = dir_open(inode_holder);
+            // printf("after find token : %s prev : %s\n", token1, prev);
           }
         }
         else {
@@ -172,18 +181,29 @@ void parse_into_parts(char * path_string, struct dir * output_dir, char* output_
         }
       }
 
-      token = strtok_r(NULL, "/", &save_ptr);
-      // printf("token : %x\n", prev);
+      // printf("Outside for loop, the end of path should be token1: %s\n", token1);
+      // memcpy(prev, token1, strlen(token1) + 1);
+      // printf("prev : %s token : %s next : %s\n", prev, token1, next);
     }
 
-    else
-      token = strtok_r(begin, "/", &save_ptr);
+    else{
 
-    // printf("1 %s\n", token);
-    memcpy (output_name, token, strlen(token) +1);
-    // printf("2\n");
+      token = strtok_r(begin, "/", &save_ptr2);
+      single = 1;
+    }
+
+    if (single == 1){
+      memcpy(output_name, token, strlen(token) + 1);
+      // printf("single case, output is : %s\n", output_name);
+    }
+    else{
+      
+      memcpy (output_name, token1, strlen(token1) +1);
+      // printf("Non-single case, final name is %s\n", output_name);
+    }
+    
     memcpy(output_dir, temp_dir, sizeof(struct dir));
-    // printf("3\n");
+    
     if (error){
       output_dir = NULL;
     }
