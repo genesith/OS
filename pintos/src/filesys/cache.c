@@ -233,3 +233,17 @@ void cache_read_aheader(void * sector){
 	thread_exit();
 */
 }
+
+void cache_clear(){
+	// printf("cache_/clear!! %s\n", thread_current()->name);
+	struct list_elem * temp_elem;
+	struct cache_struct * temp_struct;
+
+	for (temp_elem = list_begin(&buffer_cache); temp_elem != list_end(&buffer_cache); temp_elem = list_next(temp_elem)){
+		temp_struct = list_entry(temp_elem, struct cache_struct, cache_elem);
+		if(temp_struct->is_dirty == 1){
+			block_write(file_block, temp_struct->sector, temp_struct->data);
+			temp_struct->is_dirty = 0;
+		}
+	}
+}

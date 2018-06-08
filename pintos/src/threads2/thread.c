@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "filesys/cache.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -300,7 +301,8 @@ thread_exit (void)
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
-  printf("Name : %s\n", thread_current()->name);
+  cache_clear();
+  // printf("Name : %s\n", thread_current()->name);
   schedule ();
   NOT_REACHED ();
 }

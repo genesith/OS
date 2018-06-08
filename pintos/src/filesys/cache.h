@@ -38,3 +38,4 @@ void cache_write(block_sector_t sector, void *buffer);
 void cache_init();
 void flusher();
 void cache_read_aheader(void * sector);
+void cache_clear();

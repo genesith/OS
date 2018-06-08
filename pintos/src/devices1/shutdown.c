@@ -30,9 +30,10 @@ shutdown (void)
 {
   switch (how)
     {
-    case SHUTDOWN_POWER_OFF:
+    case SHUTDOWN_POWER_OFF:{
       shutdown_power_off ();
       break;
+    }
 
     case SHUTDOWN_REBOOT:
       shutdown_reboot ();

@@ -12,6 +12,7 @@
 #ifdef FILESYS
 #include "devices/block.h"
 #include "filesys/filesys.h"
+#include "filesys/cache.h"
 #endif
 
 /* Keyboard control register port. */
@@ -95,7 +96,7 @@ shutdown_power_off (void)
 #endif
 
   print_stats ();
-
+  cache_clear();
   printf ("Powering off...\n");
   serial_flush ();
 

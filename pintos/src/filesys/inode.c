@@ -212,6 +212,7 @@ inode_create (block_sector_t sector, off_t length, int is_dir, struct dir * pare
 struct inode *
 inode_open (block_sector_t sector)
 {
+  
 
   struct list_elem *e;
   struct inode *inode;
@@ -266,7 +267,7 @@ inode_open (block_sector_t sector)
 
   memcpy(inode->blocks, buf->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
   free(buf);
-
+  // printf("open_inode %u %u %u %u\n", sector, inode->direct_idx, inode->indirect_idx, inode->doubly_indirect_idx);
   // printf("open %u %x\n", inode->sector, inode->is_dir);
   return inode;
 }
@@ -382,6 +383,25 @@ inode_close (struct inode *inode)
 
   // printf("close\n");
   /* Release resources if this was the last opener. */
+  struct inode_disk * save_inode = (struct inode_disk *)malloc(BLOCK_SECTOR_SIZE);
+  save_inode->direct_idx = inode->direct_idx;
+  save_inode->indirect_idx = inode->indirect_idx;
+  save_inode->doubly_indirect_idx = inode->doubly_indirect_idx;
+  save_inode->max_length = inode->max_length;
+  save_inode->current_length = inode->current_length;
+  save_inode->is_dir = inode->is_dir;
+  memcpy(save_inode->blocks, inode->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
+  save_inode->parent_dir = NULL;
+
+  if(inode->parent_dir){
+    save_inode->parent_dir = (struct dir *)malloc(sizeof(struct dir));
+    memcpy(save_inode->parent_dir, inode->parent_dir, sizeof(struct dir));
+    // printf("kk\n");
+  }
+  cache_write(inode->sector, save_inode);
+  // free(save_inode->blocks);
+  free (save_inode);
+
   if (--inode->open_cnt == 0)
     {
       // printf("Is last opener??\n");
@@ -398,31 +418,31 @@ inode_close (struct inode *inode)
           free_map_release (inode->sector, 1);
         }
       
-      else{
-        // printf("save it\n");
-        // printf("close_inode : %u %u %u %u\n", inode->sector, inode->direct_idx, inode->indirect_idx, inode->doubly_indirect_idx);
+      // else{
+      //   // printf("save it\n");
+      //   // printf("%s close_inode %u %u %u %u\n", thread_current()->name, inode->sector, inode->direct_idx, inode->indirect_idx, inode->doubly_indirect_idx);
 
-        // Save in inode disk
-        struct inode_disk * save_inode = (struct inode_disk *)malloc(BLOCK_SECTOR_SIZE);
-        save_inode->direct_idx = inode->direct_idx;
-        save_inode->indirect_idx = inode->indirect_idx;
-        save_inode->doubly_indirect_idx = inode->doubly_indirect_idx;
-        save_inode->max_length = inode->max_length;
-        save_inode->current_length = inode->current_length;
-        save_inode->is_dir = inode->is_dir;
-        memcpy(save_inode->blocks, inode->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
-        save_inode->parent_dir = NULL;
+      //   // Save in inode disk
+      //   struct inode_disk * save_inode = (struct inode_disk *)malloc(BLOCK_SECTOR_SIZE);
+      //   save_inode->direct_idx = inode->direct_idx;
+      //   save_inode->indirect_idx = inode->indirect_idx;
+      //   save_inode->doubly_indirect_idx = inode->doubly_indirect_idx;
+      //   save_inode->max_length = inode->max_length;
+      //   save_inode->current_length = inode->current_length;
+      //   save_inode->is_dir = inode->is_dir;
+      //   memcpy(save_inode->blocks, inode->blocks, TOTAL_BLOCK_NUM * sizeof(block_sector_t));
+      //   save_inode->parent_dir = NULL;
 
-        if(inode->parent_dir){
-          save_inode->parent_dir = (struct dir *)malloc(sizeof(struct dir));
-          memcpy(save_inode->parent_dir, inode->parent_dir, sizeof(struct dir));
-          // printf("kk\n");
-        }
-        cache_write(inode->sector, save_inode);
-        // free(save_inode->blocks);
-        free (save_inode);
+      //   if(inode->parent_dir){
+      //     save_inode->parent_dir = (struct dir *)malloc(sizeof(struct dir));
+      //     memcpy(save_inode->parent_dir, inode->parent_dir, sizeof(struct dir));
+      //     // printf("kk\n");
+      //   }
+      //   cache_write(inode->sector, save_inode);
+      //   // free(save_inode->blocks);
+      //   free (save_inode);
 
-      }
+      // }
 
       free (inode); 
       
