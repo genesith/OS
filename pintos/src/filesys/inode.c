@@ -127,12 +127,48 @@ inode_create (block_sector_t sector, off_t length, int is_dir, struct dir * pare
       temp_inode->direct_idx = 0;
       temp_inode->indirect_idx = 0;
       temp_inode->doubly_indirect_idx = 0;
+      temp_inode->deny_write_cnt = 0;
       // temp_inode->blocks = (block_sector_t *) malloc(TOTAL_BLOCK_NUM * sizeof(block_sector_t));
 
       // printf("Before expand by create : current_length %d expand_size %d, %d, %d, %d\n", temp_inode->max_length, length, temp_inode->direct_idx, temp_inode->indirect_idx, temp_inode->doubly_indirect_idx);
     
-      expand_block(temp_inode, length);
+      if (is_dir == 1){
+
+        expand_block(temp_inode, 2 * sizeof(struct dir_entry));
+
+        // Add . and .. to directory
+        char temp1[] = ".";
+        char temp2[] = "..";
+
+        struct dir_entry * current_dir = (struct dir_entry *)malloc(sizeof(struct dir_entry));
+        struct dir_entry * par_dir = (struct dir_entry *)malloc(sizeof(struct dir_entry));
+        
+        current_dir->inode_sector = sector;
+        strlcpy(current_dir->name, temp1, strlen(temp1) + 1);
+        current_dir->in_use = true;
+        inode_write_at(temp_inode, (void *)current_dir, sizeof(struct dir_entry), 0);
+        // printf("write %s %u\n", current_dir->name, current_dir->inode_sector);
+
+
+        if (parent_dir){
+
+          par_dir->inode_sector = dir_get_inode(parent_dir)->sector;
+          strlcpy(par_dir->name, temp2, strlen(temp2) + 1);
+          par_dir->in_use = true;
+          inode_write_at(temp_inode, (void *)par_dir, sizeof(struct dir_entry), sizeof(struct dir_entry)); 
+          // printf("write %s %u\n", par_dir->name, par_dir->inode_sector);
+
+        }
+      }
+
+
+      else{
+        expand_block(temp_inode, length);
+      }
+
+
       // printf("After expand by create : current_length %d, %d, %d, %d\n", temp_inode->max_length, temp_inode->direct_idx, temp_inode->indirect_idx, temp_inode->doubly_indirect_idx);
+
 
 
 
@@ -483,8 +519,10 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   off_t bytes_written = 0;
   uint8_t *bounce = NULL;
 
-  if (inode->deny_write_cnt)
+  if (inode->deny_write_cnt){
+    // printf("deny\n");
     return 0;
+  }
 
   if (byte_to_sector(inode, offset + size) == -1){
     // printf("Before expand : current_length %d expand_size %d, %d, %d, %d\n", inode->max_length, offset+size, inode->direct_idx, inode->indirect_idx, inode->doubly_indirect_idx);

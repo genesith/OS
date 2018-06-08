@@ -15,11 +15,14 @@ file_open (struct inode *inode)
 {
   // printf("file_opne??\n");/
   struct file *file = calloc (1, sizeof *file);
+  // printf("inode :%x, sector : %u file :%x\n", inode, inode->sector, file);
   if (inode != NULL && file != NULL)
     {
+      // printf("here\n");
       file->inode = inode;
       file->pos = 0;
       file->deny_write = false;
+      // printf("result : %d\n", file==NULL);
       return file;
     }
 

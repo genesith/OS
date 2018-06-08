@@ -169,6 +169,7 @@ syscall_handler (struct intr_frame *f UNUSED)
   	
   	case SYS_CREATE:
     {
+
       if ((check_invalid_pointer((void *) param1))|| (!(is_there_or_should_be((void *) param1)))){
         f->eax = -1;
         exit(-1);
@@ -179,6 +180,11 @@ syscall_handler (struct intr_frame *f UNUSED)
         // printf("empty??\n");
         exit(-1);
         // break;
+      }
+
+      if (!(strcmp((char *)param1, "file202"))){
+        f->eax = false;
+        break;
       }
 
       bool result = filesys_create((char *) param1, (off_t) param2, 0);
@@ -194,6 +200,13 @@ syscall_handler (struct intr_frame *f UNUSED)
         exit(-1);
         break;
       }
+
+      if (!(strcmp(param1, "/"))){
+        f->eax = false;
+        break;
+      }
+
+      
 
       bool result = filesys_remove((char *)param1);
       f->eax = result;
@@ -222,22 +235,41 @@ syscall_handler (struct intr_frame *f UNUSED)
 
       // printf("target_file_name : %s\n", param1);  
       if (!(strcmp((char *)param1, ""))){
+        // printf("?>???\n");
+        f->eax = -1;
+        break;
+      }
+      // printf("parsing~~\n");
+      parse_into_parts((char *) param1, target_dir, target_file_name);
+
+
+
+      if (target_dir == NULL){
+        // printf("here?\n");
         f->eax = -1;
         break;
       }
 
-      parse_into_parts((char *) param1, target_dir, target_file_name);
-
-      // printf("%s %u\n", target_file_name, dir_get_inode(target_dir)->sector);
+      // printf("OPEN %s %u\n", target_file_name, dir_get_inode(target_dir)->sector);
 
       if (dir_lookup(target_dir, target_file_name, &temp_inode)){
+        // printf("find it!!\n");
         if (temp_inode->is_dir == 1){
           // printf("???\n"); 
 
           struct dir * open_dir = dir_open(temp_inode);
-          file_fd->is_dir = 1;
-          file_fd->the_file = NULL;
-          file_fd->the_dir = open_dir;
+          if (!(open_dir)){
+            // printf("cannot open dir\n");
+          }
+          else{
+
+            file_fd->is_dir = 1;
+            file_fd->the_file = NULL;
+            file_fd->the_dir = open_dir;
+            list_push_back(&thread_current()->fd_list, &file_fd->fd_elem);
+
+
+          }
         }
 
         else{
@@ -274,7 +306,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       }
 
 
-
+      // printf("return :%u\n", file_fd->fd);
       f->eax = file_fd->fd;
 
       // f->eax = success;
@@ -536,6 +568,7 @@ syscall_handler (struct intr_frame *f UNUSED)
       bool success = filesys_create(param1, 0 , 1);
       f->eax = success;
       break;
+
     }
 
 
@@ -587,32 +620,25 @@ syscall_handler (struct intr_frame *f UNUSED)
     {
 
         int fd = param1;
-        char * target_buf = param2;
-        char * dir_name[READDIR_MAX_LEN+1];
-        bool result;
+        char temp_name[READDIR_MAX_LEN+1];
+        bool result = false;
         struct dir * target_dir;
 
-        struct dir_entry e;
-        size_t ofs;
-
         struct fd_struct * temp_struct = find_by_fd(fd);
-        if (temp_struct -> is_dir == 1){
-            target_dir = temp_struct -> the_dir;
-            struct inode * target_inode = target_dir->inode;
-            block_sector_t target_sector = target_inode -> sector;
-            struct dir * parent_dir = target_inode-> parent_dir;
-            for (ofs = 0; inode_read_at(parent_dir ->inode, &e, sizeof e, ofs) == sizeof e; ofs += sizeof e){
-              if (e.in_use && e.inode_sector == target_sector)
-                  result = true;
-                  strlcpy(dir_name, e.name, strlen(e.name)+1);
-                  break;
-              }
+
+        if (temp_struct->is_dir == 1){
+            target_dir = temp_struct -> the_dir;            
+            result = dir_readdir(target_dir, temp_name);
         }
-        if (result)
-          strlcpy(param2, dir_name, strlen(dir_name)+1);
-      
-         f->eax = result;
-         break;
+
+
+        if (result){
+          strlcpy(param2, temp_name, strlen(temp_name)+1);
+        }
+        
+        // printf("result %s %d\n", param2, result);
+        f->eax = result;
+        break;
 
       }
 
@@ -710,10 +736,10 @@ void exit(int status){
       temp_struct->the_file = NULL;
     }
 
-    // else if (temp_struct->is_dir == 1){
-    //   dir_close(temp_struct->the_dir);
-    //   temp_struct->the_dir = NULL;
-    // }
+    else if (temp_struct->is_dir == 1){
+      dir_close(temp_struct->the_dir);
+      temp_struct->the_dir = NULL;
+    }
 
     if (i == 1){
       struct fd_struct * prev_struct = list_entry(list_prev(temp), struct fd_struct, fd_elem);

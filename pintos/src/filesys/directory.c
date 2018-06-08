@@ -180,30 +180,39 @@ dir_remove (struct dir *dir, const char *name)
   struct inode *inode = NULL;
   bool success = false;
   off_t ofs;
+  // printf("???\n");
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
   /* Find directory entry. */
+  // printf("0\n");
   if (!lookup (dir, name, &e, &ofs))
     goto done;
 
   /* Open inode. */
+
   inode = inode_open (e.inode_sector);
+
+  // printf("1\n");
   if (inode == NULL)
     goto done;
 
   /* Erase directory entry. */
   e.in_use = false;
-  if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
+  // printf("2\n");
+  if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e){ 
+    // printf("2\n");
     goto done;
-
+  }
   /* Remove inode. */
   inode_remove (inode);
+  // printf("3\n");
   success = true;
 
  done:
   inode_close (inode);
+  // printf("4\n");
   return success;
 }
 
@@ -220,8 +229,10 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
       dir->pos += sizeof e;
       if (e.in_use)
         {
-          strlcpy (name, e.name, NAME_MAX + 1);
-          return true;
+          if ((strcmp(e.name, ".")) && (strcmp(e.name, ".."))){
+            strlcpy (name, e.name, NAME_MAX + 1);
+            return true;
+          }
         } 
     }
   return false;

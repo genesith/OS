@@ -8,6 +8,7 @@
 #include "filesys/directory.h"
 #include "filesys/cache.h"
 #include "threads/synch.h"
+#include "userprog/syscall.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
@@ -70,6 +71,11 @@ filesys_create (const char *name, off_t initial_size, int is_dir)
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, is_dir, parent_dir)
                   && dir_add (target_dir, target_file_name, inode_sector));
+
+
+
+
+
   // printf("result : %d\n", success);
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
@@ -112,11 +118,44 @@ filesys_remove (const char *name)
   char target_file_name[MAX_FILE_LEN];
   parse_into_parts(name, target_dir, target_file_name);
 
+  // printf("remove %s %u\n", target_file_name, dir_get_inode(target_dir)->sector);
+
   if (target_dir == NULL){
       target_dir = dir_open_root();
   }
 
+  struct dir * par_dir;
+  struct inode * par_inode;
+
+  if(dir_lookup(target_dir, target_file_name, &par_inode)){
+    // printf("find it\n");
+    if(thread_current()->directory){
+      if (dir_get_inode(thread_current()->directory)->parent_dir){
+        if ((par_inode->sector == dir_get_inode(dir_get_inode(thread_current()->directory)->parent_dir)->sector)){
+        // printf("return false\n");
+          return false;
+        }
+      }
+    }
+
+    struct list_elem * temp_elem;
+    struct fd_struct * temp_struct;
+    for(temp_elem = list_begin(&thread_current()->fd_list); temp_elem != list_end(&thread_current()->fd_list) ; temp_elem = list_next(temp_elem)){
+      temp_struct = list_entry(temp_elem, struct fd_struct, fd_elem);
+      if ((temp_struct->is_dir == 1) && (dir_get_inode(temp_struct->the_dir)->sector == par_inode->sector))
+        return false;
+    }
+
+
+  }
+
+
+
+
+
+  // printf("start remove\n");
   bool success = dir_remove (target_dir, target_file_name);
+  // printf("remove done\n");
   dir_close (target_dir);
 
   return success;
@@ -130,7 +169,7 @@ do_format (void)
   
   free_map_create ();
 
-  if (!dir_create (ROOT_DIR_SECTOR, 16))
+  if (!dir_create (ROOT_DIR_SECTOR, 0))
     PANIC ("root directory creation failed");
 
   free_map_close ();
@@ -154,6 +193,7 @@ void parse_into_parts(char * path_string, struct dir * output_dir, char* output_
     if ((path_string[0]=='/') || (!(thread_current()->directory))){
       // printf("root");
       temp_dir = dir_open_root();
+      // path_string+=1;
     }
     else{
       // printf("here %s\n", thread_current()->name);
@@ -194,9 +234,9 @@ void parse_into_parts(char * path_string, struct dir * output_dir, char* output_
             // printf("after find token : %s prev : %s\n", token1, prev);
           }
         }
-        
+
         else {
-          printf("Potential error 1");
+          // printf("Potential error 1");
           error = true;
         }
       }
@@ -209,12 +249,18 @@ void parse_into_parts(char * path_string, struct dir * output_dir, char* output_
     else{
 
       token = strtok_r(begin, "/", &save_ptr2);
+
       single = 1;
     }
 
-    if (single == 1){
-      memcpy(output_name, token, strlen(token) + 1);
+    if ((single == 1)) {
+      if(token){
+        memcpy(output_name, token, strlen(token) + 1);
       // printf("single case, output is : %s\n", output_name);
+      }
+      else{
+        memcpy(output_name, ".", 2);
+      }
     }
     else{
       
