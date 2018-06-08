@@ -53,16 +53,22 @@ filesys_create (const char *name, off_t initial_size, int is_dir)
 {
   // printf("create\n");
 
+
   struct dir * target_dir = (struct dir *) malloc(sizeof(struct dir));
   char target_file_name[MAX_FILE_LEN];
-
+  struct dir * parent_dir = NULL;
   parse_into_parts(name, target_dir, target_file_name);
 
+  if (is_dir == 1){
+    parent_dir = dir_reopen(target_dir);
+  }
+
+  // printf("create name :%s, %d parent : %x\n", name, is_dir, parent_dir);
 
   block_sector_t inode_sector = 0;
   bool success = (target_dir != NULL
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size, is_dir)
+                  && inode_create (inode_sector, initial_size, is_dir, parent_dir)
                   && dir_add (target_dir, target_file_name, inode_sector));
   // printf("result : %d\n", success);
   if (!success && inode_sector != 0) 
@@ -100,11 +106,18 @@ filesys_open (const char *name, struct dir * dir)
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool
-filesys_remove (const char *name) 
+filesys_remove (const char *name)
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
-  dir_close (dir); 
+  struct dir *target_dir = (struct dir*) malloc (sizeof(struct dir));
+  char target_file_name[MAX_FILE_LEN];
+  parse_into_parts(name, target_dir, target_file_name);
+
+  if (target_dir == NULL){
+      target_dir = dir_open_root();
+  }
+
+  bool success = dir_remove (target_dir, target_file_name);
+  dir_close (target_dir);
 
   return success;
 }
@@ -153,7 +166,7 @@ void parse_into_parts(char * path_string, struct dir * output_dir, char* output_
     char next[MAX_FILE_LEN];
 
     for (token = strtok_r(begin, "/", &save_ptr); token!=NULL; token = strtok_r (NULL, "/", &save_ptr) ){
-        terms += 1;
+      terms += 1;
         // printf("term #: %d, token : %s\n", terms, token);
     }
     // printf ("Terms read : %d\n", terms);
@@ -162,19 +175,26 @@ void parse_into_parts(char * path_string, struct dir * output_dir, char* output_
     if (terms >1){
       for (token1 = strtok_r(second, "/", &save_ptr2); (token1!=NULL) && (terms > 1) ; token1 = strtok_r(NULL, "/", &save_ptr2), terms-=1){
         memcpy(prev, token1, strlen(token1)+1);
+        
+        if (!strcmp(prev, ".")){
+          continue;
+        }
 
-        //memcpy(next, save_ptr2, strlen(save_ptr2)+1);
+        else if (!strcmp(prev, "..")){
+          temp_dir = (temp_dir->inode)->parent_dir;
+        }
 
         // printf("first strtok gave token1 as %s, sent to prev: %s. Now there is %s reamining on string\n", prev, token1, save_ptr2);
 
-        if (dir_lookup(temp_dir, prev, &inode_holder)){
+        else if (dir_lookup(temp_dir, prev, &inode_holder)){
           // printf("success to find using prev: %s\n", prev);
           if ((inode_holder->is_dir) == 1){
-            
+
             temp_dir = dir_open(inode_holder);
             // printf("after find token : %s prev : %s\n", token1, prev);
           }
         }
+        
         else {
           printf("Potential error 1");
           error = true;

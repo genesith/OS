@@ -225,21 +225,23 @@ syscall_handler (struct intr_frame *f UNUSED)
         f->eax = -1;
         break;
       }
+
       parse_into_parts((char *) param1, target_dir, target_file_name);
 
       // printf("%s %u\n", target_file_name, dir_get_inode(target_dir)->sector);
 
       if (dir_lookup(target_dir, target_file_name, &temp_inode)){
         if (temp_inode->is_dir == 1){
+          // printf("???\n"); 
 
           struct dir * open_dir = dir_open(temp_inode);
           file_fd->is_dir = 1;
           file_fd->the_file = NULL;
           file_fd->the_dir = open_dir;
-
         }
 
         else{
+          // printf("open file!!\n");
 
           struct file * target_file;
 
@@ -708,10 +710,10 @@ void exit(int status){
       temp_struct->the_file = NULL;
     }
 
-    else if (temp_struct->is_dir == 1){
-      dir_close(temp_struct->the_dir);
-      temp_struct->the_dir = NULL;
-    }
+    // else if (temp_struct->is_dir == 1){
+    //   dir_close(temp_struct->the_dir);
+    //   temp_struct->the_dir = NULL;
+    // }
 
     if (i == 1){
       struct fd_struct * prev_struct = list_entry(list_prev(temp), struct fd_struct, fd_elem);
