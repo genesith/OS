@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -66,10 +67,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   int param1 = *((int *)(f->esp)+ 1);
   int param2 = *((int *)(f->esp)+ 2);
   int param3 = *((int *)(f->esp)+ 3);
-
-
-  
-
 
   switch(syscall_num){
     
@@ -178,8 +175,7 @@ syscall_handler (struct intr_frame *f UNUSED)
         break;
       }
 
-
-      bool result = filesys_create((char *)param1, (off_t) param2);
+      bool result = filesys_create((char *) param1, (off_t) param2, false);
       f->eax = result;
       break;
     
@@ -209,12 +205,13 @@ syscall_handler (struct intr_frame *f UNUSED)
         break;
       }
 
-
+      struct fd_struct * file_fd = malloc(sizeof(struct fd_struct));
+      file_fd->fd = allocate_fd();
       struct file * target_file;
-      if ((target_file = filesys_open((char *)param1))){
-        struct fd_struct * file_fd = malloc(sizeof(struct fd_struct));
 
-        file_fd->fd = allocate_fd();
+      if ((target_file = filesys_open((char *)param1))){
+
+        file_fd->is_dir = 0;
 
         file_fd->the_file = target_file;
         if (target_file->inode->deny_write_cnt > 0){
@@ -229,6 +226,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
       else
         f->eax = -1;
+
+      
+
+      
 
       break;
     }
@@ -293,16 +294,6 @@ syscall_handler (struct intr_frame *f UNUSED)
   	
   	case SYS_WRITE:
   	{
-      // printf("SysWrite has been called\n");
-      // printf("Check address %x %x\n", param2, f->esp);
-
-      // if (is_code_segment((void * ) param2)){
-      //   f->eax = -1;
-      //   exit(-1);
-      //   break;
-      // }
-
-      // printf("write code : %d %x %x\n", param1, param2, thread_current()->last_load);
 
 
       if ((check_invalid_pointer((void *) param2)) || (!(is_there_or_should_be((void *) param2)))){
@@ -507,17 +498,44 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     case SYS_MKDIR:
     {
-      create_
-      printf("mkdir\n");
+
+      struct dir ** target_dir;
+      char * output_name;
+      // char output_name[16];
+      parse_into_parts((char *)param1, target_dir, output_name);
+
+      bool success = filesys_create(param1, 0 ,true);
+      f->eax = success;
       break;
     }
+
+
+
 
     case SYS_CHDIR:
     {
-      printf("chdir\n");
+
+      
+
+      // f->eax = success;
       break;
     }
 
+    case SYS_READDIR:
+    {
+      break;
+    }
+
+    case SYS_ISDIR:
+    {
+      break;
+    }
+
+    case SYS_INUMBER:
+    {
+      break;
+
+    }
     default:
     {
       // printf("Something else!!\n");
@@ -587,10 +605,16 @@ void exit(int status){
       temp_struct->the_file = NULL;
     }
 
+    else if (temp_struct->is_dir == 1){
+      dir_close(temp_struct->the_dir);
+      temp_struct->the_dir = NULL;
+    }
+
     if (i == 1){
       struct fd_struct * prev_struct = list_entry(list_prev(temp), struct fd_struct, fd_elem);
       free(prev_struct);
     }
+
     i = 1;
 
     for (j = 1; j <= thread_current()->last_mmapid; j++){
@@ -615,65 +639,11 @@ bool check_invalid_pointer(void * addr){
     return 1;
 
 
-  // printf("check 1. %x\n", addr);
-  // fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)
-  
-  // if (addr < USER_VADDR_BOTTOM)
-  //   return 1;
-  // if (!(is_user_vaddr(addr)))
-  //   return 1;
-
-  // if (addr > PHYS_BASE-12)
-  //   return 1;
-
-  // void * ptr = pagedir_get_page(thread_current()->pagedir, addr);
-  // if(!ptr){
-  //   printf("here!!\n");
-  //   return 1;
-  // }
-  // if (addr < 0x8048000)
-  //    return 1;
-
-  // if (!(addr))
-  //    return 1;
-
 
   return 0;
 }
 
-bool check_invalid_pointer2(void * addr, void * f_esp){
 
-  // printf("check 2, %x %x\n", addr, f_esp);
-  // fault_addr > USER_VADDR_BOTTOM && is_user_vaddr(fault_addr)
-  
-  // if (addr < USER_VADDR_BOTTOM)
-  //   return 1;
-  // if (!(is_user_vaddr(addr)))
-  //   return 1;
-
-  // if (addr > PHYS_BASE)
-  //   return 1;
-
-  // if (addr >= f_esp)
-  //   return 0;
-
-  // if ((addr <= f_esp-0x1000) && (addr >= USER_VADDR_BOTTOM + 0x10000000))
-  //   return 1;
-
-  // void * ptr = pagedir_get_page(thread_current()->pagedir, addr);
-  // if(!ptr){
-  //   // printf("here!!\n");
-  //   return 1;
-  // }
-  // if (addr < 0x8048000)
-  //    return 1;
-
-  // if (!(addr))
-  //    return 1;
-
-
-  return 0;
-}
 
 bool is_code_segment(void * addr){
   if ((USER_VADDR_BOTTOM <= addr) && (addr <= USER_VADDR_BOTTOM + 0x1000))
@@ -689,3 +659,36 @@ bool is_there_or_should_be(void * addr){
 
     return (page_ptr || invalid_ptr);
   }
+
+void parse_to_list(char * dir_string, struct list * the_list, int* terms, bool* is_root){
+    printf("tokstring : %s\n", dir_string);
+    char* begin[BUF_LEN];
+    strlcpy(begin, dir_string, strlen(dir_string) + 1);
+    *is_root =false;
+    if (dir_string[0]=='/'){
+      dir_string++;
+      *is_root =true;
+    }
+    char * token, *save_ptr;
+    list_init(the_list);
+
+    *terms = 0;
+    for (token = strtok_r(begin, "/", &save_ptr); token!=NULL; token = strtok_r (NULL, "/", &save_ptr) ){
+        printf("token : %s\n", token);
+        *terms += 1;
+        struct parse_struct * temp = (struct parse_struct *)malloc (sizeof(struct parse_struct));
+        strlcpy(temp->parse_string, token, strlen(token) + 1);
+         // = token;
+        list_push_back(the_list, &temp->parse_elem);
+    }
+
+    // if (*terms == 0){
+    //   struct parse_struct * last_dir = (struct parse_struct *)malloc (sizeof(struct parse_struct));
+    //   // printf("save : %s, dir_string : %s\n", save_ptr, dir_string);
+    //   strlcpy(last_dir->parse_string, dir_string, strlen(dir_string) + 1);
+    //   // last_dir->parse_string = begin;
+    //   list_push_back(the_list, &last_dir->parse_elem);
+    //   *terms += 1;
+    // }
+}
+

@@ -97,6 +97,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->directory = NULL;
+
   sema_init(&initial_thread->child_sema, 0);
 
 }
@@ -186,6 +188,17 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
   t->parent_thread = thread_current();
+  // printf("current name : %s, parent name : %s %u\n", t->name, thread_current()->name, dir_get_inode(thread_current()->directory)->sector);
+  // printf("current name : %s, parent name : %s\n", t->name, thread_current()->name);
+
+  if (thread_current()->directory){
+    t->directory = dir_reopen(thread_current()->directory);  
+  }
+  else{
+    t->directory = NULL;
+  }
+  
+
   sema_init(&t->child_sema, 0);
   sema_init(&t->fd_list_lock, 1);
   if (strcmp(name, "Read_aheader"))

@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "filesys/directory.h"
 #include "synch.h"
 #include "filesys/inode.h"
 
@@ -118,6 +119,7 @@ struct thread
     void * last_esp;
     void * last_load;
     struct list mmap_list;
+    struct dir * directory;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
